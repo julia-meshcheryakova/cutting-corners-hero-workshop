@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cutting Corners Hero</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#e6edf3;font-family:system-ui,sans-serif;padding:16px;max-width:680px;margin:0 auto}
+h1{font-size:1.5rem;color:#f0883e;margin-bottom:4px}
+.sub{color:#8b949e;font-size:.85rem;margin-bottom:20px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:16px}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.75rem;font-weight:600;margin-bottom:8px}
+.trap{background:#21262d;color:#f0883e}
+input,textarea{width:100%;background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:10px;font-size:1rem;font-family:inherit}
+textarea{resize:vertical;min-height:100px}
+button{background:#238636;color:#fff;border:none;border-radius:6px;padding:10px 20px;font-size:1rem;cursor:pointer;width:100%;margin-top:8px}
+button:hover{background:#2ea043}
+button:disabled{background:#21262d;color:#8b949e;cursor:not-allowed}
+.error{color:#f85149;font-size:.85rem;margin-top:6px}
+.scores{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0}
+.score-box{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 14px;text-align:center}
+.score-box .num{font-size:1.5rem;font-weight:700;color:#f0883e}
+.score-box .lbl{font-size:.7rem;color:#8b949e;text-transform:uppercase}
+.verdict{font-style:italic;color:#79c0ff;margin-top:8px;border-left:3px solid #1f6feb;padding-left:10px}
+.lb-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d}
+.lb-row:last-child{border-bottom:none}
+.lb-rank{color:#8b949e;min-width:28px}
+.lb-score{color:#f0883e;font-weight:600}
+.waiting{color:#8b949e;text-align:center;padding:24px 0}
+.pulse{animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.revealed{background:#161b22;border:1px solid #388bfd;border-radius:6px;padding:12px;margin-top:12px}
+.revealed h3{color:#388bfd;margin-bottom:6px;font-size:.9rem}
+.owasp{font-size:.75rem;background:#21262d;color:#79c0ff;padding:2px 8px;border-radius:10px;display:inline-block;margin-top:6px}
+#phase-join{}
+#phase-lobby,#phase-active,#phase-submitted{display:none}
+</style>
+</head>
+<body>
+<h1>🦸 Cutting Corners Hero</h1>
+<p class="sub">The most recklessly efficient AI engineer wins.</p>
+
+<!-- JOIN -->
+<div id="phase-join" class="card">
+  <label style="display:block;margin-bottom:8px;font-weight:600">Your hacker nickname</label>
+  <input id="nick-input" type="text" placeholder="e.g. YOLODeploy42" maxlength="30">
+  <button id="join-btn" onclick="join()">Join Workshop</button>
+  <div class="error" id="join-err"></div>
+</div>
+
+<!-- LOBBY -->
+<div id="phase-lobby" class="card">
+  <div class="waiting pulse">⏳ Waiting for the facilitator to start…</div>
+</div>
+
+<!-- ACTIVE SCENARIO -->
+<div id="phase-active" class="card">
+  <span class="badge trap" id="trap-badge"></span>
+  <p style="font-size:.8rem;color:#8b949e;margin-bottom:10px" id="scenario-counter"></p>
+  <p id="situation-text" style="line-height:1.6;margin-bottom:14px"></p>
+  <label style="display:block;margin-bottom:6px;font-weight:600">How would YOU cut this corner? 🔪</label>
+  <textarea id="answer-input" placeholder="Describe your gloriously reckless shortcut…"></textarea>
+  <button id="submit-btn" onclick="submitAnswer()">Submit Answer</button>
+  <div class="error" id="submit-err"></div>
+</div>
+
+<!-- SUBMITTED / WAITING FOR REVEAL -->
+<div id="phase-submitted" class="card">
+  <p style="color:#3fb950;font-weight:600;margin-bottom:10px">✅ Answer submitted!</p>
+  <div id="score-area"></div>
+  <div id="reveal-area"></div>
+  <div class="waiting pulse" id="waiting-reveal" style="margin-top:12px">⏳ Waiting for facilitator to reveal impact…</div>
+</div>
+
+<!-- LEADERBOARD (always visible after join) -->
+<div id="leaderboard-wrap" style="display:none" class="card">
+  <h2 style="font-size:1rem;margin-bottom:10px;color:#f0883e">🏆 Leaderboard</h2>
+  <div id="lb-list"><div class="waiting">No scores yet.</div></div>
+</div>
+
+<script>
+let nickname = null;
+let lastIdx = null;
+let submitted = false;
+let pollTimer = null;
+
+function show(phase) {
+  ['join','lobby','active','submitted'].forEach(p => {
+    document.getElementById('phase-'+p).style.display = p === phase ? 'block' : 'none';
+  });
+}
+
+async function join() {
+  const nick = document.getElementById('nick-input').value.trim();
+  if (!nick) { document.getElementById('join-err').textContent = 'Enter a nickname.'; return; }
+  const r = await fetch('/api/join', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:nick})});
+  const d = await r.json();
+  if (d.error) { document.getElementById('join-err').textContent = d.error; return; }
+  nickname = d.nickname;
+  document.getElementById('leaderboard-wrap').style.display = 'block';
+  show('lobby');
+  startPolling();
+}
+
+async function submitAnswer() {
+  const answer = document.getElementById('answer-input').value.trim();
+  if (!answer) { document.getElementById('submit-err').textContent = 'Write something!'; return; }
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('submit-btn').textContent = 'Scoring…';
+  const r = await fetch('/api/submit', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname,answer})});
+  const d = await r.json();
+  if (d.error) {
+    document.getElementById('submit-err').textContent = d.error;
+    document.getElementById('submit-btn').disabled = false;
+    document.getElementById('submit-btn').textContent = 'Submit Answer';
+    return;
+  }
+  submitted = true;
+  show('submitted');
+  renderScores(d.score, d.total);
+  updateLeaderboard();
+}
+
+function renderScores(s, total) {
+  document.getElementById('score-area').innerHTML = `
+    <div class="scores">
+      <div class="score-box"><div class="num">${s.realism}</div><div class="lbl">Realism</div></div>
+      <div class="score-box"><div class="num">${s.danger}</div><div class="lbl">Danger</div></div>
+      <div class="score-box"><div class="num">${s.creativity}</div><div class="lbl">Creativity</div></div>
+      <div class="score-box"><div class="num">${total}</div><div class="lbl">Total</div></div>
+    </div>
+    <div class="verdict">"${s.verdict}"</div>
+    <div class="owasp">${s.owasp}</div>
+  `;
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(poll, 2500);
+  poll();
+}
+
+async function poll() {
+  const [sr, lr] = await Promise.all([fetch('/api/scenario'), fetch('/api/leaderboard')]);
+  const scenario = await sr.json();
+  const lb = await lr.json();
+  renderLeaderboard(lb.leaderboard);
+
+  const currentPhase = document.querySelector('[id^="phase-"]:not([style*="display: none"]),[id^="phase-"]:not([style*="display:none"])');
+
+  if (scenario.status === 'lobby') {
+    if (!submitted) show('lobby');
+    lastIdx = null; submitted = false;
+    return;
+  }
+
+  const idx = scenario.scenario.index;
+  if (idx !== lastIdx) {
+    lastIdx = idx; submitted = false;
+    document.getElementById('answer-input').value = '';
+    document.getElementById('submit-err').textContent = '';
+    document.getElementById('submit-btn').disabled = false;
+    document.getElementById('submit-btn').textContent = 'Submit Answer';
+  }
+
+  if (!submitted) {
+    document.getElementById('trap-badge').textContent = scenario.scenario.trap;
+    document.getElementById('scenario-counter').textContent = `Scenario ${scenario.scenario.index+1} of ${scenario.scenario.total}`;
+    document.getElementById('situation-text').textContent = scenario.scenario.situation;
+    show('active');
+  }
+
+  // handle reveal
+  if (submitted) {
+    show('submitted');
+    const revealArea = document.getElementById('reveal-area');
+    const waitingReveal = document.getElementById('waiting-reveal');
+    if (scenario.revealed && scenario.scenario.impact) {
+      waitingReveal.style.display = 'none';
+      revealArea.innerHTML = `
+        <div class="revealed">
+          <h3>💥 Impact</h3><p>${scenario.scenario.impact}</p>
+          <h3 style="margin-top:10px">🛡️ Mitigation</h3><p>${scenario.scenario.mitigation}</p>
+          <div class="owasp">${scenario.scenario.owasp}</div>
+        </div>`;
+    } else {
+      waitingReveal.style.display = 'block';
+      revealArea.innerHTML = '';
+    }
+  }
+}
+
+function renderLeaderboard(board) {
+  if (!board.length) { document.getElementById('lb-list').innerHTML = '<div class="waiting">No scores yet.</div>'; return; }
+  document.getElementById('lb-list').innerHTML = board.map((p,i) =>
+    `<div class="lb-row"><span class="lb-rank">#${i+1}</span><span>${p.nickname}</span><span class="lb-score">${p.score} pts</span></div>`
+  ).join('');
+}
+
+async function updateLeaderboard() {
+  const r = await fetch('/api/leaderboard');
+  const d = await r.json();
+  renderLeaderboard(d.leaderboard);
+}
+
+document.getElementById('nick-input').addEventListener('keydown', e => { if(e.key==='Enter') join(); });
+</script>
+</body>
+</html>

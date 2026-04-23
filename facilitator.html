@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Facilitator — Cutting Corners Hero</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#e6edf3;font-family:system-ui,sans-serif;padding:16px;max-width:900px;margin:0 auto}
+h1{font-size:1.4rem;color:#f0883e;margin-bottom:4px}
+.sub{color:#8b949e;font-size:.85rem;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:640px){.grid{grid-template-columns:1fr}}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;margin-bottom:14px}
+h2{font-size:.95rem;color:#79c0ff;margin-bottom:10px}
+button{background:#238636;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:.85rem;cursor:pointer;margin-right:6px}
+button:hover{background:#2ea043}
+button.secondary{background:#21262d;color:#c9d1d9}
+button.secondary:hover{background:#30363d}
+button.danger{background:#b62324}
+button.danger:hover{background:#da3633}
+button:disabled{background:#21262d;color:#555;cursor:not-allowed}
+.scenario-item{padding:10px;border:1px solid #30363d;border-radius:6px;margin-bottom:8px;background:#0d1117}
+.scenario-item.active{border-color:#f0883e}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:600;margin-bottom:4px;background:#21262d;color:#f0883e}
+.status-bar{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.dot{width:10px;height:10px;border-radius:50%;background:#3fb950;flex-shrink:0}
+.dot.lobby{background:#f0883e}
+.answer-item{background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:10px;margin-bottom:8px}
+.answer-nick{font-weight:600;color:#79c0ff;margin-bottom:4px;font-size:.85rem}
+.answer-text{color:#c9d1d9;font-size:.9rem;margin-bottom:6px}
+.scores-mini{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.sm{background:#21262d;border-radius:4px;padding:3px 8px;font-size:.75rem}
+.sm span{color:#f0883e;font-weight:700}
+.verdict-sm{font-style:italic;color:#79c0ff;font-size:.8rem;border-left:2px solid #1f6feb;padding-left:8px}
+.owasp{font-size:.72rem;background:#21262d;color:#79c0ff;padding:2px 6px;border-radius:8px;display:inline-block}
+.lb-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #21262d;font-size:.85rem}
+.lb-row:last-child{border-bottom:none}
+.lb-score{color:#f0883e;font-weight:600}
+#action-btns{margin-bottom:14px}
+</style>
+</head>
+<body>
+<h1>🎛️ Facilitator Console</h1>
+<p class="sub">Cutting Corners Hero — workshop control panel</p>
+
+<div id="status-bar" class="status-bar">
+  <div class="dot lobby" id="status-dot"></div>
+  <span id="status-text">Loading…</span>
+</div>
+
+<div id="action-btns">
+  <button onclick="apiPost('/api/next')">▶ Next Scenario</button>
+  <button class="secondary" onclick="apiPost('/api/reveal')">💥 Reveal Impact</button>
+</div>
+
+<div class="grid">
+  <div>
+    <div class="card">
+      <h2>📋 Scenarios</h2>
+      <div id="scenario-list">Loading…</div>
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <h2>📥 Answers (current scenario)</h2>
+      <div id="answers-list"><div style="color:#8b949e;font-size:.85rem">No answers yet.</div></div>
+    </div>
+    <div class="card">
+      <h2>🏆 Leaderboard</h2>
+      <div id="lb-list"><div style="color:#8b949e;font-size:.85rem">No scores yet.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let scenarios = [];
+let currentIdx = null;
+
+async function apiPost(url) {
+  await fetch(url, {method:'POST'});
+  poll();
+}
+
+async function pushScenario(idx) {
+  // keep pushing next until we reach target index
+  // easier: just expose a direct set if needed; for now "next" cycles
+  await fetch('/api/next', {method:'POST'});
+  poll();
+}
+
+async function poll() {
+  const [sr, ar, lr] = await Promise.all([
+    fetch('/api/scenarios_list'),
+    fetch('/api/answers'),
+    fetch('/api/leaderboard')
+  ]);
+  const sd = await sr.json();
+  const ad = await ar.json();
+  const ld = await lr.json();
+
+  scenarios = sd.scenarios;
+  currentIdx = sd.current_idx;
+
+  renderStatus(sd);
+  renderScenarios(sd.scenarios, sd.current_idx);
+  renderAnswers(ad.answers);
+  renderLeaderboard(ld.leaderboard);
+}
+
+function renderStatus(sd) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  if (sd.current_idx === null) {
+    dot.className = 'dot lobby';
+    txt.textContent = 'Status: Lobby — no active scenario';
+  } else {
+    dot.className = 'dot';
+    const s = sd.scenarios[sd.current_idx];
+    txt.textContent = `Active: Scenario ${sd.current_idx+1}/${sd.scenarios.length} — "${s.trap}"`;
+  }
+}
+
+function renderScenarios(list, cidx) {
+  document.getElementById('scenario-list').innerHTML = list.map((s,i) => `
+    <div class="scenario-item${i===cidx?' active':''}">
+      <div class="badge">${s.trap}</div>
+      <div style="font-size:.82rem;color:#8b949e;margin-bottom:4px">${s.trap_category}</div>
+      <div style="font-size:.85rem;line-height:1.5">${s.situation.substring(0,120)}…</div>
+      ${i===cidx ? '<div style="color:#f0883e;font-size:.75rem;margin-top:4px">▶ ACTIVE</div>' : ''}
+    </div>
+  `).join('');
+}
+
+function renderAnswers(answers) {
+  const el = document.getElementById('answers-list');
+  if (!answers.length) { el.innerHTML = '<div style="color:#8b949e;font-size:.85rem">No answers yet.</div>'; return; }
+  el.innerHTML = answers.map(a => {
+    const s = a.score || {};
+    const total = a.total || 0;
+    return `
+    <div class="answer-item">
+      <div class="answer-nick">${a.nickname} <span style="color:#f0883e;font-size:.8rem">+${total}pts</span></div>
+      <div class="answer-text">${a.answer}</div>
+      <div class="scores-mini">
+        <div class="sm">Realism <span>${s.realism||'?'}</span></div>
+        <div class="sm">Danger <span>${s.danger||'?'}</span></div>
+        <div class="sm">Creativity <span>${s.creativity||'?'}</span></div>
+        <div class="owasp">${s.owasp||''}</div>
+      </div>
+      <div class="verdict-sm">"${s.verdict||''}"</div>
+    </div>`;
+  }).join('');
+}
+
+function renderLeaderboard(board) {
+  const el = document.getElementById('lb-list');
+  if (!board.length) { el.innerHTML = '<div style="color:#8b949e;font-size:.85rem">No scores yet.</div>'; return; }
+  el.innerHTML = board.map((p,i) =>
+    `<div class="lb-row"><span>#${i+1} ${p.nickname}</span><span class="lb-score">${p.score} pts</span></div>`
+  ).join('');
+}
+
+setInterval(poll, 2500);
+poll();
+</script>
+</body>
+</html>
