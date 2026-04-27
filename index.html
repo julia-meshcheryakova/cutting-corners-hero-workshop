@@ -74,8 +74,8 @@ button:disabled{background:#21262d;color:#8b949e;cursor:not-allowed}
   <p style="color:#3fb950;font-weight:600;margin-bottom:10px">✅ Answer submitted!</p>
   <div id="submitted-context"></div>
   <div id="score-area"></div>
+  <div id="submitted-impact"></div>
   <div id="reveal-area"></div>
-  <div class="waiting pulse" id="waiting-reveal" style="margin-top:12px">⏳ Waiting for facilitator to reveal impact…</div>
 </div>
 
 <!-- LEADERBOARD (always visible after join) -->
@@ -148,8 +148,10 @@ function renderSubmittedContext(situation, answer, impact, mitigation) {
   document.getElementById('submitted-context').innerHTML = `
     <div class="context-box"><h4>📋 Scenario</h4><p>${situation}</p></div>
     <div class="context-box"><h4>🔪 Your Answer</h4><p>${answer}</p></div>
-    <div class="context-box"><h4>💥 Impact</h4><p>${impact}</p></div>
-    <div class="context-box"><h4>🛡️ Mitigation</h4><p>${mitigation}</p></div>
+  `;
+  document.getElementById('submitted-impact').innerHTML = `
+    <div class="context-box" style="margin-top:12px;border-color:#388bfd"><h4>💥 Impact</h4><p>${impact}</p></div>
+    <div class="context-box" style="border-color:#3fb950"><h4>🛡️ Mitigation</h4><p>${mitigation}</p></div>
   `;
 }
 
@@ -191,23 +193,9 @@ async function poll() {
     show('active');
   }
 
-  // handle reveal
+  // submitted view shows score + impact + mitigation immediately on submit
   if (submitted) {
     show('submitted');
-    const revealArea = document.getElementById('reveal-area');
-    const waitingReveal = document.getElementById('waiting-reveal');
-    if (scenario.revealed && scenario.scenario.impact) {
-      waitingReveal.style.display = 'none';
-      revealArea.innerHTML = `
-        <div class="revealed">
-          <h3>💥 Impact</h3><p>${scenario.scenario.impact}</p>
-          <h3 style="margin-top:10px">🛡️ Mitigation</h3><p>${scenario.scenario.mitigation}</p>
-          <div class="owasp">${scenario.scenario.owasp}</div>
-        </div>`;
-    } else {
-      waitingReveal.style.display = 'block';
-      revealArea.innerHTML = '';
-    }
   }
 }
 

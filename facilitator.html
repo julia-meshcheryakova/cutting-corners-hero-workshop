@@ -63,11 +63,7 @@ button:disabled{background:#21262d;color:#555;cursor:not-allowed}
 <div class="grid">
   <div>
     <div class="card">
-      <h2>� Players <span id="player-count" style="color:#8b949e;font-size:.8rem"></span></h2>
-      <div id="players-list"><div style="color:#8b949e;font-size:.85rem">No players yet.</div></div>
-    </div>
-    <div class="card">
-      <h2>�📋 Scenarios</h2>
+      <h2>📋 Scenarios</h2>
       <div id="scenario-list">Loading…</div>
     </div>
   </div>
@@ -77,12 +73,15 @@ button:disabled{background:#21262d;color:#555;cursor:not-allowed}
       <div id="answers-list"><div style="color:#8b949e;font-size:.85rem">No answers yet.</div></div>
     </div>
     <div class="card">
+      <h2>👥 Players <span id="player-count" style="color:#8b949e;font-size:.8rem"></span></h2>
+      <div id="players-list"><div style="color:#8b949e;font-size:.85rem">No players yet.</div></div>
+    </div>
+    <div class="card">
       <h2>🏆 Leaderboard</h2>
       <div id="lb-list"><div style="color:#8b949e;font-size:.85rem">No scores yet.</div></div>
     </div>
   </div>
 </div>
-
 <script>
 let scenarios = [];
 let currentIdx = null;
