@@ -181,8 +181,14 @@ def next_scenario():
     else:
         state["current_idx"] = None  # back to lobby / done
     state["revealed"] = False
-    state["timer_start"] = time.time() if state["current_idx"] is not None else None
+    state["timer_start"] = None
     return jsonify({"ok": True, "current_idx": state["current_idx"]})
+
+@app.route("/api/start_timer", methods=["POST"])
+def start_timer():
+    if state["current_idx"] is not None:
+        state["timer_start"] = time.time()
+    return jsonify({"ok": True})
 
 @app.route("/api/reveal", methods=["POST"])
 def reveal():
