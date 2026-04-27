@@ -18,9 +18,13 @@ az webapp config appsettings set \
   --name "$APP_NAME" \
   --settings \
     AZURE_OPENAI_ENDPOINT="$AZURE_OPENAI_ENDPOINT" \
-    AZURE_OPENAI_KEY="$AZURE_OPENAI_KEY" \
     AZURE_OPENAI_DEPLOYMENT="${AZURE_OPENAI_DEPLOYMENT:-gpt-4o-mini}" \
     SCM_DO_BUILD_DURING_DEPLOYMENT=true
+
+# Enable system-assigned managed identity
+az webapp identity assign \
+  --resource-group "$RG" \
+  --name "$APP_NAME"
 
 # Configure startup command
 az webapp config set \

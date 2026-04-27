@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify, send_from_directory
 app = Flask(__name__, static_folder=".")
 
 # ── State ──────────────────────────────────────────────────────────────────────
-with open("scenarios.json") as f:
+with open("scenarios.json", encoding="utf-8") as f:
     SCENARIOS = json.load(f)
 
 state = {
@@ -15,7 +15,6 @@ state = {
 
 # ── Azure OpenAI scoring ───────────────────────────────────────────────────────
 AZURE_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
-AZURE_KEY      = os.environ.get("AZURE_OPENAI_KEY", "")
 AZURE_DEPLOY   = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
 
 SCORE_PROMPT = """You are the ruthless judge of "Cutting Corners Hero", a security awareness game.
@@ -46,23 +45,32 @@ def mock_score(answer: str) -> dict:
         "verdict":    "Bold move, cotton — let's see if it pays off. (mock score)"
     }
 
+def _get_azure_token() -> str:
+    from azure.identity import DefaultAzureCredential
+    credential = DefaultAzureCredential()
+    token = credential.get_token("https://cognitiveservices.azure.com/.default")
+    return token.token
+
+def _call_azure_openai(prompt: str) -> dict:
+    import httpx
+    token = _get_azure_token()
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    payload = {
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.7,
+        "max_tokens": 200
+    }
+    url = f"{AZURE_ENDPOINT}/openai/deployments/{AZURE_DEPLOY}/chat/completions?api-version=2024-02-01"
+    r = httpx.post(url, json=payload, headers=headers, timeout=15)
+    r.raise_for_status()
+    return json.loads(r.json()["choices"][0]["message"]["content"].strip())
+
 def ai_score(situation: str, answer: str) -> dict:
-    if not AZURE_KEY:
+    if not AZURE_ENDPOINT:
         return mock_score(answer)
     try:
-        import httpx, time as _t
         prompt = SCORE_PROMPT.format(situation=situation, answer=answer)
-        headers = {"api-key": AZURE_KEY, "Content-Type": "application/json"}
-        payload = {
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.7,
-            "max_tokens": 200
-        }
-        url = f"{AZURE_ENDPOINT}/openai/deployments/{AZURE_DEPLOY}/chat/completions?api-version=2024-02-01"
-        r = httpx.post(url, json=payload, headers=headers, timeout=15)
-        r.raise_for_status()
-        text = r.json()["choices"][0]["message"]["content"].strip()
-        return json.loads(text)
+        return _call_azure_openai(prompt)
     except Exception as e:
         print(f"AI scoring failed: {e}, using mock")
         return mock_score(answer)
