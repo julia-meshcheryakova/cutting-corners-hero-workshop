@@ -11,6 +11,7 @@ state = {
     "players": {},          # nickname -> {score, answers:[]}
     "current_idx": None,    # index into SCENARIOS, None = lobby
     "revealed": False,
+    "timer_start": None,    # epoch when current scenario started
 }
 
 # ── Azure OpenAI scoring ───────────────────────────────────────────────────────
@@ -102,6 +103,8 @@ def get_scenario():
             "total": len(SCENARIOS)
         }
     }
+    if state["timer_start"]:
+        resp["timer_start"] = state["timer_start"]
     if state["revealed"]:
         resp["scenario"]["impact"]     = s["impact"]
         resp["scenario"]["mitigation"] = s["mitigation"]
@@ -137,7 +140,13 @@ def submit():
         "total": total,
         "ts": time.time()
     })
-    return jsonify({"ok": True, "score": score_data, "total": total})
+    return jsonify({
+        "ok": True, "score": score_data, "total": total,
+        "situation": SCENARIOS[idx]["situation"],
+        "answer": answer,
+        "impact": SCENARIOS[idx]["impact"],
+        "mitigation": SCENARIOS[idx]["mitigation"],
+    })
 
 @app.route("/api/leaderboard", methods=["GET"])
 def leaderboard():
@@ -172,6 +181,7 @@ def next_scenario():
     else:
         state["current_idx"] = None  # back to lobby / done
     state["revealed"] = False
+    state["timer_start"] = time.time() if state["current_idx"] is not None else None
     return jsonify({"ok": True, "current_idx": state["current_idx"]})
 
 @app.route("/api/reveal", methods=["POST"])
@@ -179,9 +189,20 @@ def reveal():
     state["revealed"] = True
     return jsonify({"ok": True})
 
+@app.route("/api/players", methods=["GET"])
+def players():
+    """List all registered players and whether they've submitted for the current scenario."""
+    idx = state["current_idx"]
+    sid = SCENARIOS[idx]["id"] if idx is not None else None
+    result = []
+    for nick, p in state["players"].items():
+        submitted = any(a["scenario_id"] == sid for a in p["answers"]) if sid else False
+        result.append({"nickname": nick, "submitted": submitted})
+    return jsonify({"players": result})
+
 @app.route("/api/scenarios_list", methods=["GET"])
 def scenarios_list():
-    return jsonify({"scenarios": SCENARIOS, "current_idx": state["current_idx"]})
+    return jsonify({"scenarios": SCENARIOS, "current_idx": state["current_idx"], "timer_start": state["timer_start"]})
 
 @app.route("/", defaults={"path": "index.html"})
 @app.route("/<path:path>")

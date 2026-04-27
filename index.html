@@ -32,6 +32,10 @@ button:disabled{background:#21262d;color:#8b949e;cursor:not-allowed}
 .revealed{background:#161b22;border:1px solid #388bfd;border-radius:6px;padding:12px;margin-top:12px}
 .revealed h3{color:#388bfd;margin-bottom:6px;font-size:.9rem}
 .owasp{font-size:.75rem;background:#21262d;color:#79c0ff;padding:2px 8px;border-radius:10px;display:inline-block;margin-top:6px}
+.timer{font-size:1.2rem;font-weight:700;color:#f0883e;text-align:center;margin-bottom:10px}
+.timer.urgent{color:#f85149;animation:pulse 1s ease-in-out infinite}
+.context-box{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px;margin:8px 0;font-size:.88rem;line-height:1.5}
+.context-box h4{color:#79c0ff;margin-bottom:4px;font-size:.82rem}
 #phase-join{}
 #phase-lobby,#phase-active,#phase-submitted{display:none}
 </style>
@@ -55,6 +59,7 @@ button:disabled{background:#21262d;color:#8b949e;cursor:not-allowed}
 
 <!-- ACTIVE SCENARIO -->
 <div id="phase-active" class="card">
+  <div class="timer" id="timer"></div>
   <span class="badge trap" id="trap-badge"></span>
   <p style="font-size:.8rem;color:#8b949e;margin-bottom:10px" id="scenario-counter"></p>
   <p id="situation-text" style="line-height:1.6;margin-bottom:14px"></p>
@@ -67,6 +72,7 @@ button:disabled{background:#21262d;color:#8b949e;cursor:not-allowed}
 <!-- SUBMITTED / WAITING FOR REVEAL -->
 <div id="phase-submitted" class="card">
   <p style="color:#3fb950;font-weight:600;margin-bottom:10px">✅ Answer submitted!</p>
+  <div id="submitted-context"></div>
   <div id="score-area"></div>
   <div id="reveal-area"></div>
   <div class="waiting pulse" id="waiting-reveal" style="margin-top:12px">⏳ Waiting for facilitator to reveal impact…</div>
@@ -83,6 +89,9 @@ let nickname = null;
 let lastIdx = null;
 let submitted = false;
 let pollTimer = null;
+let timerStart = null;
+let tickTimer = null;
+const TIMER_SECS = 120;
 
 function show(phase) {
   ['join','lobby','active','submitted'].forEach(p => {
@@ -118,6 +127,7 @@ async function submitAnswer() {
   submitted = true;
   show('submitted');
   renderScores(d.score, d.total);
+  renderSubmittedContext(d.situation, answer, d.impact, d.mitigation);
   updateLeaderboard();
 }
 
@@ -131,6 +141,15 @@ function renderScores(s, total) {
     </div>
     <div class="verdict">"${s.verdict}"</div>
     <div class="owasp">${s.owasp}</div>
+  `;
+}
+
+function renderSubmittedContext(situation, answer, impact, mitigation) {
+  document.getElementById('submitted-context').innerHTML = `
+    <div class="context-box"><h4>📋 Scenario</h4><p>${situation}</p></div>
+    <div class="context-box"><h4>🔪 Your Answer</h4><p>${answer}</p></div>
+    <div class="context-box"><h4>💥 Impact</h4><p>${impact}</p></div>
+    <div class="context-box"><h4>🛡️ Mitigation</h4><p>${mitigation}</p></div>
   `;
 }
 
@@ -161,6 +180,8 @@ async function poll() {
     document.getElementById('submit-err').textContent = '';
     document.getElementById('submit-btn').disabled = false;
     document.getElementById('submit-btn').textContent = 'Submit Answer';
+    timerStart = scenario.timer_start || null;
+    startTickTimer();
   }
 
   if (!submitted) {
@@ -204,6 +225,24 @@ async function updateLeaderboard() {
 }
 
 document.getElementById('nick-input').addEventListener('keydown', e => { if(e.key==='Enter') join(); });
+
+function startTickTimer() {
+  if (tickTimer) clearInterval(tickTimer);
+  tickTimer = setInterval(updateTimerDisplay, 1000);
+  updateTimerDisplay();
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('timer');
+  if (!timerStart) { el.textContent = ''; return; }
+  const elapsed = Math.floor(Date.now()/1000 - timerStart);
+  const remaining = Math.max(0, TIMER_SECS - elapsed);
+  const min = Math.floor(remaining / 60);
+  const sec = remaining % 60;
+  el.textContent = `⏱ ${min}:${sec.toString().padStart(2,'0')}`;
+  el.className = remaining <= 30 ? 'timer urgent' : 'timer';
+  if (remaining === 0) { el.textContent = '⏱ Time\'s up!'; clearInterval(tickTimer); }
+}
 </script>
 </body>
 </html>

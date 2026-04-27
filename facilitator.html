@@ -37,6 +37,12 @@ button:disabled{background:#21262d;color:#555;cursor:not-allowed}
 .lb-row:last-child{border-bottom:none}
 .lb-score{color:#f0883e;font-weight:600}
 #action-btns{margin-bottom:14px}
+.player-item{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #21262d;font-size:.85rem}
+.player-item:last-child{border-bottom:none}
+.status-submitted{color:#3fb950;font-size:.75rem}
+.status-waiting{color:#f0883e;font-size:.75rem}
+.timer-display{font-size:1.1rem;font-weight:700;color:#f0883e;margin-left:auto}
+.timer-display.urgent{color:#f85149}
 </style>
 </head>
 <body>
@@ -46,6 +52,7 @@ button:disabled{background:#21262d;color:#555;cursor:not-allowed}
 <div id="status-bar" class="status-bar">
   <div class="dot lobby" id="status-dot"></div>
   <span id="status-text">Loading…</span>
+  <span class="timer-display" id="fac-timer"></span>
 </div>
 
 <div id="action-btns">
@@ -56,7 +63,11 @@ button:disabled{background:#21262d;color:#555;cursor:not-allowed}
 <div class="grid">
   <div>
     <div class="card">
-      <h2>📋 Scenarios</h2>
+      <h2>� Players <span id="player-count" style="color:#8b949e;font-size:.8rem"></span></h2>
+      <div id="players-list"><div style="color:#8b949e;font-size:.85rem">No players yet.</div></div>
+    </div>
+    <div class="card">
+      <h2>�📋 Scenarios</h2>
       <div id="scenario-list">Loading…</div>
     </div>
   </div>
@@ -75,6 +86,9 @@ button:disabled{background:#21262d;color:#555;cursor:not-allowed}
 <script>
 let scenarios = [];
 let currentIdx = null;
+let timerStart = null;
+let tickTimer = null;
+const TIMER_SECS = 120;
 
 async function apiPost(url) {
   await fetch(url, {method:'POST'});
@@ -89,14 +103,16 @@ async function pushScenario(idx) {
 }
 
 async function poll() {
-  const [sr, ar, lr] = await Promise.all([
+  const [sr, ar, lr, pr] = await Promise.all([
     fetch('/api/scenarios_list'),
     fetch('/api/answers'),
-    fetch('/api/leaderboard')
+    fetch('/api/leaderboard'),
+    fetch('/api/players')
   ]);
   const sd = await sr.json();
   const ad = await ar.json();
   const ld = await lr.json();
+  const pd = await pr.json();
 
   scenarios = sd.scenarios;
   currentIdx = sd.current_idx;
@@ -105,6 +121,7 @@ async function poll() {
   renderScenarios(sd.scenarios, sd.current_idx);
   renderAnswers(ad.answers);
   renderLeaderboard(ld.leaderboard);
+  renderPlayers(pd.players);
 }
 
 function renderStatus(sd) {
@@ -113,11 +130,30 @@ function renderStatus(sd) {
   if (sd.current_idx === null) {
     dot.className = 'dot lobby';
     txt.textContent = 'Status: Lobby — no active scenario';
+    timerStart = null;
   } else {
     dot.className = 'dot';
     const s = sd.scenarios[sd.current_idx];
     txt.textContent = `Active: Scenario ${sd.current_idx+1}/${sd.scenarios.length} — "${s.trap}"`;
+    if (sd.timer_start && sd.timer_start !== timerStart) {
+      timerStart = sd.timer_start;
+      if (tickTimer) clearInterval(tickTimer);
+      tickTimer = setInterval(updateFacTimer, 1000);
+      updateFacTimer();
+    }
   }
+}
+
+function updateFacTimer() {
+  const el = document.getElementById('fac-timer');
+  if (!timerStart) { el.textContent = ''; return; }
+  const elapsed = Math.floor(Date.now()/1000 - timerStart);
+  const remaining = Math.max(0, TIMER_SECS - elapsed);
+  const min = Math.floor(remaining / 60);
+  const sec = remaining % 60;
+  el.textContent = `⏱ ${min}:${sec.toString().padStart(2,'0')}`;
+  el.className = remaining <= 30 ? 'timer-display urgent' : 'timer-display';
+  if (remaining === 0) { el.textContent = '⏱ Time\'s up!'; clearInterval(tickTimer); }
 }
 
 function renderScenarios(list, cidx) {
@@ -162,6 +198,29 @@ function renderLeaderboard(board) {
 
 setInterval(poll, 2500);
 poll();
+
+function renderPlayers(players) {
+  const el = document.getElementById('players-list');
+  const countEl = document.getElementById('player-count');
+  if (!players.length) {
+    el.innerHTML = '<div style="color:#8b949e;font-size:.85rem">No players yet.</div>';
+    countEl.textContent = '';
+    return;
+  }
+  const total = players.length;
+  const submittedCount = players.filter(p => p.submitted).length;
+  const waiting = total - submittedCount;
+  countEl.textContent = currentIdx !== null ? `(${submittedCount}/${total} submitted, ${waiting} waiting)` : `(${total} registered)`;
+  el.innerHTML = players.map(p => `
+    <div class="player-item">
+      <span>${p.nickname}</span>
+      ${currentIdx !== null ? (p.submitted
+        ? '<span class="status-submitted">✅ Submitted</span>'
+        : '<span class="status-waiting">⏳ Waiting</span>')
+        : ''}
+    </div>
+  `).join('');
+}
 </script>
 </body>
 </html>
