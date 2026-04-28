@@ -195,7 +195,12 @@ async function poll() {
     document.getElementById('submit-err').textContent = '';
     document.getElementById('submit-btn').disabled = false;
     document.getElementById('submit-btn').textContent = 'Submit Answer';
-    timerStart = scenario.timer_start || null;
+  }
+
+  // Update timer on every poll so it appears when facilitator starts it
+  const newTimerStart = scenario.timer_start || null;
+  if (newTimerStart !== timerStart) {
+    timerStart = newTimerStart;
     startTickTimer();
   }
 
@@ -227,6 +232,24 @@ async function updateLeaderboard() {
 
 document.getElementById('nick-input').addEventListener('keydown', e => { if(e.key==='Enter') join(); });
 
+async function autoSubmit() {
+  const answer = document.getElementById('answer-input').value.trim() || '(no answer - time expired)';
+  const predicted_impact = document.getElementById('impact-input').value.trim() || '(no prediction - time expired)';
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('submit-btn').textContent = 'Time\'s up — submitting…';
+  const r = await fetch('/api/submit', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname,answer,predicted_impact})});
+  const d = await r.json();
+  if (d.error) {
+    document.getElementById('submit-err').textContent = d.error;
+    return;
+  }
+  submitted = true;
+  show('submitted');
+  renderScores(d.score, d.total);
+  renderSubmittedContext(d.situation, answer, predicted_impact, d.impact, d.mitigation);
+  updateLeaderboard();
+}
+
 function startTickTimer() {
   if (tickTimer) clearInterval(tickTimer);
   tickTimer = setInterval(updateTimerDisplay, 1000);
@@ -242,7 +265,11 @@ function updateTimerDisplay() {
   const sec = remaining % 60;
   el.textContent = `⏱ ${min}:${sec.toString().padStart(2,'0')}`;
   el.className = remaining <= 30 ? 'timer urgent' : 'timer';
-  if (remaining === 0) { el.textContent = '⏱ Time\'s up!'; clearInterval(tickTimer); }
+  if (remaining === 0) {
+    el.textContent = '⏱ Time\'s up!';
+    clearInterval(tickTimer);
+    if (!submitted) autoSubmit();
+  }
 }
 </script>
 </body>
