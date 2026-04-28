@@ -75,6 +75,10 @@ button:disabled{background:#21262d;color:#555;cursor:not-allowed}
       <div id="answers-list"><div style="color:#8b949e;font-size:.85rem">No answers yet.</div></div>
     </div>
     <div class="card">
+      <h2>📊 All Answers <button class="secondary" style="font-size:.7rem;padding:3px 8px" onclick="loadAllAnswers()">Load</button></h2>
+      <div id="all-answers-list"><div style="color:#8b949e;font-size:.85rem">Click Load to fetch all answers across scenarios.</div></div>
+    </div>
+    <div class="card">
       <h2>👥 Players <span id="player-count" style="color:#8b949e;font-size:.8rem"></span></h2>
       <div id="players-list"><div style="color:#8b949e;font-size:.85rem">No players yet.</div></div>
     </div>
@@ -221,13 +225,54 @@ function renderPlayers(players) {
   const submittedCount = players.filter(p => p.submitted).length;
   const waiting = total - submittedCount;
   countEl.textContent = currentIdx !== null ? `(${submittedCount}/${total} submitted, ${waiting} waiting)` : `(${total} registered)`;
-  el.innerHTML = players.map(p => `
-    <div class="player-item">
+  el.innerHTML = players.map(p => {
+    const breakdown = (p.breakdown || []).map(b =>
+      `<span class="sm" style="font-size:.7rem">Q${b.scenario_id}: <span>${b.total}</span></span>`
+    ).join('');
+    return `
+    <div class="player-item" style="flex-wrap:wrap">
       <span>${p.nickname}</span>
+      <span class="lb-score">${p.total_score} pts</span>
       ${currentIdx !== null ? (p.submitted
-        ? '<span class="status-submitted">✅ Submitted</span>'
-        : '<span class="status-waiting">⏳ Waiting</span>')
+        ? '<span class="status-submitted">✅</span>'
+        : '<span class="status-waiting">⏳</span>')
         : ''}
+      ${breakdown ? `<div style="width:100%;display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${breakdown}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function loadAllAnswers() {
+  const r = await fetch('/api/answers?scope=all');
+  const d = await r.json();
+  const el = document.getElementById('all-answers-list');
+  if (!d.answers.length) { el.innerHTML = '<div style="color:#8b949e;font-size:.85rem">No answers.</div>'; return; }
+  // Group by scenario
+  const grouped = {};
+  d.answers.forEach(a => {
+    if (!grouped[a.scenario_id]) grouped[a.scenario_id] = [];
+    grouped[a.scenario_id].push(a);
+  });
+  el.innerHTML = Object.entries(grouped).map(([sid, answers]) => `
+    <div style="margin-bottom:12px">
+      <div style="font-size:.8rem;color:#f0883e;font-weight:600;margin-bottom:6px">Scenario ${sid}</div>
+      ${answers.map(a => {
+        const s = a.score || {};
+        return `<div class="answer-item">
+          <div class="answer-nick">${a.nickname} <span style="color:#f0883e;font-size:.8rem">+${a.total}pts</span></div>
+          <div class="answer-text"><strong>Shortcut:</strong> ${a.answer}</div>
+          ${a.predicted_impact ? `<div class="answer-text" style="color:#79c0ff"><strong>Predicted:</strong> ${a.predicted_impact}</div>` : ''}
+          <div class="scores-mini">
+            <div class="sm">R <span>${s.realism||'?'}</span></div>
+            <div class="sm">D <span>${s.danger||'?'}</span></div>
+            <div class="sm">C <span>${s.creativity||'?'}</span></div>
+            <div class="sm">IA <span>${s.impact_accuracy||'?'}</span></div>
+            <div class="sm">IS <span>${s.impact_severity||'?'}</span></div>
+          </div>
+          <div class="verdict-sm">"${s.shortcut_verdict||''}"</div>
+          ${s.impact_verdict ? `<div class="verdict-sm">"${s.impact_verdict}"</div>` : ''}
+        </div>`;
+      }).join('')}
     </div>
   `).join('');
 }

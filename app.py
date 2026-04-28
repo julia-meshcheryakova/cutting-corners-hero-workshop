@@ -150,9 +150,16 @@ def submit():
         SCENARIOS[idx]["situation"], answer,
         predicted_impact, SCENARIOS[idx]["impact"]
     )
-    total = (score_data.get("realism",0) + score_data.get("danger",0) +
-             score_data.get("creativity",0) + score_data.get("impact_accuracy",0) +
-             score_data.get("impact_severity",0))
+    # Clamp all score fields to 1-5
+    for key in ("realism", "danger", "creativity", "impact_accuracy", "impact_severity"):
+        val = score_data.get(key, 0)
+        if not isinstance(val, int):
+            try: val = int(val)
+            except: val = 0
+        score_data[key] = max(0, min(5, val))
+    total = (score_data["realism"] + score_data["danger"] +
+             score_data["creativity"] + score_data["impact_accuracy"] +
+             score_data["impact_severity"])
     player["score"] += total
     player["answers"].append({
         "scenario_id": SCENARIOS[idx]["id"],
@@ -181,11 +188,23 @@ def leaderboard():
 
 @app.route("/api/answers", methods=["GET"])
 def answers():
-    """Facilitator: all answers for current scenario"""
-    idx = state["current_idx"]
-    if idx is None:
-        return jsonify({"answers": []})
-    sid = SCENARIOS[idx]["id"]
+    """Facilitator: answers for a specific or current scenario, or all."""
+    scope = request.args.get("scope", "current")  # current | all | <scenario_id>
+    if scope == "all":
+        result = []
+        for nick, p in state["players"].items():
+            for a in p["answers"]:
+                result.append({"nickname": nick, **a})
+        result.sort(key=lambda x: x["ts"])
+        return jsonify({"answers": result})
+    elif scope == "current":
+        idx = state["current_idx"]
+        if idx is None:
+            return jsonify({"answers": []})
+        sid = SCENARIOS[idx]["id"]
+    else:
+        try: sid = int(scope)
+        except: return jsonify({"error": "invalid scope"}), 400
     result = []
     for nick, p in state["players"].items():
         for a in p["answers"]:
@@ -238,13 +257,27 @@ def set_scenario():
 
 @app.route("/api/players", methods=["GET"])
 def players():
-    """List all registered players and whether they've submitted for the current scenario."""
+    """List all players with per-question score breakdown."""
     idx = state["current_idx"]
     sid = SCENARIOS[idx]["id"] if idx is not None else None
     result = []
     for nick, p in state["players"].items():
         submitted = any(a["scenario_id"] == sid for a in p["answers"]) if sid else False
-        result.append({"nickname": nick, "submitted": submitted})
+        # Per-question breakdown
+        breakdown = []
+        for a in p["answers"]:
+            breakdown.append({
+                "scenario_id": a["scenario_id"],
+                "total": a["total"],
+                "scores": {k: a["score"][k] for k in ("realism","danger","creativity","impact_accuracy","impact_severity") if k in a["score"]}
+            })
+        result.append({
+            "nickname": nick,
+            "total_score": p["score"],
+            "submitted": submitted,
+            "breakdown": breakdown
+        })
+    result.sort(key=lambda x: -x["total_score"])
     return jsonify({"players": result})
 
 @app.route("/api/scenarios_list", methods=["GET"])
