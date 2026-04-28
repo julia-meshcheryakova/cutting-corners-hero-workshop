@@ -35,6 +35,63 @@ The identity needs the **Cognitive Services OpenAI User** role on the Azure Open
 
 ## Deploy to Azure App Service
 
+### Option 1 — Bicep (infrastructure as code)
+
+The `infra/` folder contains Bicep templates that provision everything:
+
+* App Service Plan (Linux, S1)
+* Web App (Python 3.12, system-assigned managed identity)
+* RBAC role assignment — **Cognitive Services OpenAI User** on the Azure OpenAI resource
+
+#### Prerequisites
+
+* An existing resource group
+* An existing Azure OpenAI resource with a `gpt-4o-mini` deployment
+
+#### Deploy infrastructure
+
+```bash
+az deployment group create \
+  -g <resource-group> \
+  -f infra/main.bicep \
+  -p infra/main.bicepparam
+```
+
+Override defaults inline if needed:
+
+```bash
+az deployment group create \
+  -g my-rg \
+  -f infra/main.bicep \
+  -p appName=myapp \
+     skuName=B1 \
+     openAiEndpoint=https://my-openai.openai.azure.com/ \
+     openAiDeployment=gpt-4o-mini \
+     openAiResourceId=/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<name>
+```
+
+#### Deploy application code
+
+After infrastructure is up, push the app code:
+
+```bash
+zip -r deploy.zip app.py index.html facilitator.html scenarios.json requirements.txt
+az webapp deploy -g <resource-group> -n <app-name> --src-path deploy.zip --type zip
+```
+
+#### Bicep parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `appName` | `cuttingcornershero` | Web app name (must be globally unique) |
+| `location` | resource group location | Azure region |
+| `skuName` | `S1` | App Service Plan SKU |
+| `openAiEndpoint` | *(required)* | Azure OpenAI endpoint URL |
+| `openAiDeployment` | `gpt-4o-mini` | Model deployment name |
+| `openAiResourceId` | *(required)* | Full resource ID of the Azure OpenAI account |
+
+### Option 2 — Shell script
+
 ```bash
 export APP_NAME=cutting-corners-hero RESOURCE_GROUP=my-rg APP_SERVICE_PLAN=my-plan
 export AZURE_OPENAI_ENDPOINT=https://my-resource.openai.azure.com

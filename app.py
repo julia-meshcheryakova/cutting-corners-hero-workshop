@@ -210,7 +210,7 @@ def answers():
         for a in p["answers"]:
             if a["scenario_id"] == sid:
                 result.append({"nickname": nick, **a})
-    result.sort(key=lambda x: x["ts"])
+    result.sort(key=lambda x: -x["total"])
     return jsonify({"answers": result})
 
 @app.route("/api/next", methods=["POST"])
