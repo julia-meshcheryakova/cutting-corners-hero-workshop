@@ -195,6 +195,24 @@ def reveal():
     state["revealed"] = True
     return jsonify({"ok": True})
 
+@app.route("/api/reset", methods=["POST"])
+def reset():
+    state["players"] = {}
+    state["current_idx"] = None
+    state["revealed"] = False
+    state["timer_start"] = None
+    return jsonify({"ok": True})
+
+@app.route("/api/set_scenario", methods=["POST"])
+def set_scenario():
+    data = request.json or {}
+    idx = data.get("index")
+    if idx is not None and 0 <= idx < len(SCENARIOS):
+        state["current_idx"] = idx
+        state["revealed"] = False
+        state["timer_start"] = None
+    return jsonify({"ok": True, "current_idx": state["current_idx"]})
+
 @app.route("/api/players", methods=["GET"])
 def players():
     """List all registered players and whether they've submitted for the current scenario."""

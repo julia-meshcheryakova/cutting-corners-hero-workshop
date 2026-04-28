@@ -59,6 +59,7 @@ button:disabled{background:#21262d;color:#555;cursor:not-allowed}
   <button onclick="apiPost('/api/next')">▶ Next Scenario</button>
   <button onclick="apiPost('/api/start_timer')">⏱ Start Timer</button>
   <button class="secondary" onclick="apiPost('/api/reveal')">💥 Reveal Impact</button>
+  <button class="danger" onclick="if(confirm('Reset all players and scores?')) apiPost('/api/reset')">🔄 Reset Game</button>
 </div>
 
 <div class="grid">
@@ -158,13 +159,18 @@ function updateFacTimer() {
 
 function renderScenarios(list, cidx) {
   document.getElementById('scenario-list').innerHTML = list.map((s,i) => `
-    <div class="scenario-item${i===cidx?' active':''}">
+    <div class="scenario-item${i===cidx?' active':''}" style="cursor:pointer" onclick="setScenario(${i})">
       <div class="badge">${s.trap}</div>
       <div style="font-size:.82rem;color:#8b949e;margin-bottom:4px">${s.trap_category}</div>
       <div style="font-size:.85rem;line-height:1.5">${s.situation.substring(0,120)}…</div>
       ${i===cidx ? '<div style="color:#f0883e;font-size:.75rem;margin-top:4px">▶ ACTIVE</div>' : ''}
     </div>
   `).join('');
+}
+
+async function setScenario(idx) {
+  await fetch('/api/set_scenario', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:idx})});
+  poll();
 }
 
 function renderAnswers(answers) {
