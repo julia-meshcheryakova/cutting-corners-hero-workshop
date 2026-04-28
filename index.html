@@ -65,6 +65,8 @@ button:disabled{background:#21262d;color:#8b949e;cursor:not-allowed}
   <p id="situation-text" style="line-height:1.6;margin-bottom:14px"></p>
   <label style="display:block;margin-bottom:6px;font-weight:600">How would YOU cut this corner? 🔪</label>
   <textarea id="answer-input" placeholder="Describe your gloriously reckless shortcut…"></textarea>
+  <label style="display:block;margin-top:12px;margin-bottom:6px;font-weight:600">What could go wrong? 💥</label>
+  <textarea id="impact-input" placeholder="Predict the impact of your shortcut…"></textarea>
   <button id="submit-btn" onclick="submitAnswer()">Submit Answer</button>
   <div class="error" id="submit-err"></div>
 </div>
@@ -113,10 +115,12 @@ async function join() {
 
 async function submitAnswer() {
   const answer = document.getElementById('answer-input').value.trim();
-  if (!answer) { document.getElementById('submit-err').textContent = 'Write something!'; return; }
+  const predicted_impact = document.getElementById('impact-input').value.trim();
+  if (!answer) { document.getElementById('submit-err').textContent = 'Write a shortcut!'; return; }
+  if (!predicted_impact) { document.getElementById('submit-err').textContent = 'Predict the impact!'; return; }
   document.getElementById('submit-btn').disabled = true;
   document.getElementById('submit-btn').textContent = 'Scoring…';
-  const r = await fetch('/api/submit', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname,answer})});
+  const r = await fetch('/api/submit', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname,answer,predicted_impact})});
   const d = await r.json();
   if (d.error) {
     document.getElementById('submit-err').textContent = d.error;
@@ -127,30 +131,38 @@ async function submitAnswer() {
   submitted = true;
   show('submitted');
   renderScores(d.score, d.total);
-  renderSubmittedContext(d.situation, answer, d.impact, d.mitigation);
+  renderSubmittedContext(d.situation, answer, predicted_impact, d.impact, d.mitigation);
   updateLeaderboard();
 }
 
 function renderScores(s, total) {
   document.getElementById('score-area').innerHTML = `
+    <h3 style="color:#f0883e;font-size:.9rem;margin-bottom:6px">🔪 Shortcut Score</h3>
     <div class="scores">
       <div class="score-box"><div class="num">${s.realism}</div><div class="lbl">Realism</div></div>
       <div class="score-box"><div class="num">${s.danger}</div><div class="lbl">Danger</div></div>
       <div class="score-box"><div class="num">${s.creativity}</div><div class="lbl">Creativity</div></div>
+    </div>
+    <div class="verdict">"${s.shortcut_verdict}"</div>
+    <h3 style="color:#388bfd;font-size:.9rem;margin:14px 0 6px">💥 Impact Prediction Score</h3>
+    <div class="scores">
+      <div class="score-box"><div class="num">${s.impact_accuracy}</div><div class="lbl">Accuracy</div></div>
+      <div class="score-box"><div class="num">${s.impact_severity}</div><div class="lbl">Severity</div></div>
       <div class="score-box"><div class="num">${total}</div><div class="lbl">Total</div></div>
     </div>
-    <div class="verdict">"${s.verdict}"</div>
+    <div class="verdict">"${s.impact_verdict}"</div>
     <div class="owasp">${s.owasp}</div>
   `;
 }
 
-function renderSubmittedContext(situation, answer, impact, mitigation) {
+function renderSubmittedContext(situation, answer, predicted_impact, impact, mitigation) {
   document.getElementById('submitted-context').innerHTML = `
     <div class="context-box"><h4>📋 Scenario</h4><p>${situation}</p></div>
-    <div class="context-box"><h4>🔪 Your Answer</h4><p>${answer}</p></div>
+    <div class="context-box"><h4>🔪 Your Shortcut</h4><p>${answer}</p></div>
+    <div class="context-box"><h4>🔮 Your Predicted Impact</h4><p>${predicted_impact}</p></div>
   `;
   document.getElementById('submitted-impact').innerHTML = `
-    <div class="context-box" style="margin-top:12px;border-color:#388bfd"><h4>💥 Impact</h4><p>${impact}</p></div>
+    <div class="context-box" style="margin-top:12px;border-color:#388bfd"><h4>💥 Actual Impact</h4><p>${impact}</p></div>
     <div class="context-box" style="border-color:#3fb950"><h4>🛡️ Mitigation</h4><p>${mitigation}</p></div>
   `;
 }
@@ -179,6 +191,7 @@ async function poll() {
   if (idx !== lastIdx) {
     lastIdx = idx; submitted = false;
     document.getElementById('answer-input').value = '';
+    document.getElementById('impact-input').value = '';
     document.getElementById('submit-err').textContent = '';
     document.getElementById('submit-btn').disabled = false;
     document.getElementById('submit-btn').textContent = 'Submit Answer';

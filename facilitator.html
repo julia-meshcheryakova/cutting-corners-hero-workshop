@@ -182,14 +182,18 @@ function renderAnswers(answers) {
     return `
     <div class="answer-item">
       <div class="answer-nick">${a.nickname} <span style="color:#f0883e;font-size:.8rem">+${total}pts</span></div>
-      <div class="answer-text">${a.answer}</div>
+      <div class="answer-text"><strong>Shortcut:</strong> ${a.answer}</div>
+      ${a.predicted_impact ? `<div class="answer-text" style="color:#79c0ff"><strong>Predicted impact:</strong> ${a.predicted_impact}</div>` : ''}
       <div class="scores-mini">
         <div class="sm">Realism <span>${s.realism||'?'}</span></div>
         <div class="sm">Danger <span>${s.danger||'?'}</span></div>
         <div class="sm">Creativity <span>${s.creativity||'?'}</span></div>
+        <div class="sm">Accuracy <span>${s.impact_accuracy||'?'}</span></div>
+        <div class="sm">Severity <span>${s.impact_severity||'?'}</span></div>
         <div class="owasp">${s.owasp||''}</div>
       </div>
-      <div class="verdict-sm">"${s.verdict||''}"</div>
+      <div class="verdict-sm">"${s.shortcut_verdict||s.verdict||''}"</div>
+      ${s.impact_verdict ? `<div class="verdict-sm">"${s.impact_verdict}"</div>` : ''}
     </div>`;
   }).join('');
 }

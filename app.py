@@ -19,31 +19,41 @@ AZURE_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
 AZURE_DEPLOY   = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
 
 SCORE_PROMPT = """You are the ruthless judge of "Cutting Corners Hero", a security awareness game.
-A participant described how they would dangerously cut corners in an AI security scenario.
-Score their answer and return ONLY valid JSON — no markdown, no explanation, just JSON.
+A participant described how they would dangerously cut corners in an AI security scenario, AND predicted what could go wrong.
+Score BOTH parts and return ONLY valid JSON — no markdown, no explanation, just JSON.
 
 Scenario: {situation}
 
-Participant answer: {answer}
+Actual impact (ground truth): {actual_impact}
+
+Participant's shortcut: {answer}
+
+Participant's predicted impact: {predicted_impact}
 
 Return this exact JSON structure:
 {{
-  "realism": <1-5 integer>,
-  "danger": <1-5 integer>,
-  "creativity": <1-5 integer>,
+  "realism": <1-5 integer — how realistic is the shortcut>,
+  "danger": <1-5 integer — how dangerous is the shortcut>,
+  "creativity": <1-5 integer — how creative is the shortcut>,
+  "impact_accuracy": <1-5 integer — how close is their predicted impact to the actual impact>,
+  "impact_severity": <1-5 integer — did they grasp how severe the consequences could be>,
   "owasp": "<OWASP LLM category e.g. LLM01>",
-  "verdict": "<one witty sentence praising their recklessness>"
+  "shortcut_verdict": "<one witty sentence about their shortcut>",
+  "impact_verdict": "<one witty sentence about their impact prediction>"
 }}"""
 
-def mock_score(answer: str) -> dict:
-    seed = sum(ord(c) for c in answer)
+def mock_score(answer: str, predicted_impact: str = "") -> dict:
+    seed = sum(ord(c) for c in (answer + predicted_impact))
     rng = random.Random(seed)
     return {
-        "realism":    rng.randint(2, 5),
-        "danger":     rng.randint(2, 5),
-        "creativity": rng.randint(1, 5),
-        "owasp":      "LLM01",
-        "verdict":    "Bold move, cotton — let's see if it pays off. (mock score)"
+        "realism":          rng.randint(2, 5),
+        "danger":           rng.randint(2, 5),
+        "creativity":       rng.randint(1, 5),
+        "impact_accuracy":  rng.randint(1, 5),
+        "impact_severity":  rng.randint(1, 5),
+        "owasp":            "LLM01",
+        "shortcut_verdict": "Bold move, cotton — let's see if it pays off. (mock score)",
+        "impact_verdict":   "Your crystal ball needs calibration. (mock score)"
     }
 
 def _get_azure_token() -> str:
@@ -66,15 +76,18 @@ def _call_azure_openai(prompt: str) -> dict:
     r.raise_for_status()
     return json.loads(r.json()["choices"][0]["message"]["content"].strip())
 
-def ai_score(situation: str, answer: str) -> dict:
+def ai_score(situation: str, answer: str, predicted_impact: str = "", actual_impact: str = "") -> dict:
     if not AZURE_ENDPOINT:
-        return mock_score(answer)
+        return mock_score(answer, predicted_impact)
     try:
-        prompt = SCORE_PROMPT.format(situation=situation, answer=answer)
+        prompt = SCORE_PROMPT.format(
+            situation=situation, answer=answer,
+            predicted_impact=predicted_impact, actual_impact=actual_impact
+        )
         return _call_azure_openai(prompt)
     except Exception as e:
         print(f"AI scoring failed: {e}, using mock")
-        return mock_score(answer)
+        return mock_score(answer, predicted_impact)
 
 # ── API ────────────────────────────────────────────────────────────────────────
 @app.route("/api/join", methods=["POST"])
@@ -116,12 +129,15 @@ def submit():
     data    = request.json or {}
     nick    = data.get("nickname", "").strip()
     answer  = data.get("answer", "").strip()[:1000]
+    predicted_impact = data.get("predicted_impact", "").strip()[:1000]
     idx     = state["current_idx"]
 
     if not nick or nick not in state["players"]:
         return jsonify({"error": "join first"}), 400
     if not answer:
-        return jsonify({"error": "answer required"}), 400
+        return jsonify({"error": "shortcut required"}), 400
+    if not predicted_impact:
+        return jsonify({"error": "predicted impact required"}), 400
     if idx is None:
         return jsonify({"error": "no active scenario"}), 400
 
@@ -130,12 +146,18 @@ def submit():
     if any(a["scenario_id"] == SCENARIOS[idx]["id"] for a in player["answers"]):
         return jsonify({"error": "already submitted"}), 400
 
-    score_data = ai_score(SCENARIOS[idx]["situation"], answer)
-    total = score_data.get("realism",0) + score_data.get("danger",0) + score_data.get("creativity",0)
+    score_data = ai_score(
+        SCENARIOS[idx]["situation"], answer,
+        predicted_impact, SCENARIOS[idx]["impact"]
+    )
+    total = (score_data.get("realism",0) + score_data.get("danger",0) +
+             score_data.get("creativity",0) + score_data.get("impact_accuracy",0) +
+             score_data.get("impact_severity",0))
     player["score"] += total
     player["answers"].append({
         "scenario_id": SCENARIOS[idx]["id"],
         "answer": answer,
+        "predicted_impact": predicted_impact,
         "score": score_data,
         "total": total,
         "ts": time.time()
@@ -144,6 +166,7 @@ def submit():
         "ok": True, "score": score_data, "total": total,
         "situation": SCENARIOS[idx]["situation"],
         "answer": answer,
+        "predicted_impact": predicted_impact,
         "impact": SCENARIOS[idx]["impact"],
         "mitigation": SCENARIOS[idx]["mitigation"],
     })
