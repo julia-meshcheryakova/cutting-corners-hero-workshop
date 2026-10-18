@@ -89,6 +89,7 @@ button:disabled{background:#21262d;color:#555;cursor:not-allowed}
   </div>
 </div>
 <script>
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let scenarios = [];
 let currentIdx = null;
 let timerStart = null;
@@ -215,19 +216,19 @@ function renderAnswers(answers) {
     const total = a.total || 0;
     return `
     <div class="answer-item">
-      <div class="answer-nick">${a.nickname} <span style="color:#f0883e;font-size:.8rem">+${total}pts</span></div>
-      <div class="answer-text"><strong>Shortcut:</strong> ${a.answer}</div>
-      ${a.predicted_impact ? `<div class="answer-text" style="color:#79c0ff"><strong>Predicted impact:</strong> ${a.predicted_impact}</div>` : ''}
+      <div class="answer-nick">${esc(a.nickname)} <span style="color:#f0883e;font-size:.8rem">+${total}pts</span></div>
+      <div class="answer-text"><strong>Shortcut:</strong> ${esc(a.answer)}</div>
+      ${a.predicted_impact ? `<div class="answer-text" style="color:#79c0ff"><strong>Predicted impact:</strong> ${esc(a.predicted_impact)}</div>` : ''}
       <div class="scores-mini">
         <div class="sm">Realism <span>${s.realism||'?'}</span></div>
         <div class="sm">Danger <span>${s.danger||'?'}</span></div>
         <div class="sm">Creativity <span>${s.creativity||'?'}</span></div>
         <div class="sm">Accuracy <span>${s.impact_accuracy||'?'}</span></div>
         <div class="sm">Severity <span>${s.impact_severity||'?'}</span></div>
-        <div class="owasp">${s.owasp||''}</div>
+        <div class="owasp">${esc(s.owasp||'')}</div>
       </div>
-      <div class="verdict-sm">"${s.shortcut_verdict||s.verdict||''}"</div>
-      ${s.impact_verdict ? `<div class="verdict-sm">"${s.impact_verdict}"</div>` : ''}
+      <div class="verdict-sm">"${esc(s.shortcut_verdict||s.verdict||'')}"</div>
+      ${s.impact_verdict ? `<div class="verdict-sm">"${esc(s.impact_verdict)}"</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -236,7 +237,7 @@ function renderLeaderboard(board) {
   const el = document.getElementById('lb-list');
   if (!board.length) { el.innerHTML = '<div style="color:#8b949e;font-size:.85rem">No scores yet.</div>'; return; }
   el.innerHTML = board.map((p,i) =>
-    `<div class="lb-row"><span>#${i+1} ${p.nickname}</span><span class="lb-score">${p.score} pts</span></div>`
+    `<div class="lb-row"><span>#${i+1} ${esc(p.nickname)}</span><span class="lb-score">${p.score} pts</span></div>`
   ).join('');
 }
 
@@ -261,7 +262,7 @@ function renderPlayers(players) {
     ).join('');
     return `
     <div class="player-item" style="flex-wrap:wrap">
-      <span>${p.nickname}</span>
+      <span>${esc(p.nickname)}</span>
       <span class="lb-score">${p.total_score} pts</span>
       ${currentIdx !== null ? (p.submitted
         ? '<span class="status-submitted">✅</span>'
@@ -290,9 +291,9 @@ async function loadAllAnswers() {
       ${answers.map(a => {
         const s = a.score || {};
         return `<div class="answer-item">
-          <div class="answer-nick">${a.nickname} <span style="color:#f0883e;font-size:.8rem">+${a.total}pts</span></div>
-          <div class="answer-text"><strong>Shortcut:</strong> ${a.answer}</div>
-          ${a.predicted_impact ? `<div class="answer-text" style="color:#79c0ff"><strong>Predicted:</strong> ${a.predicted_impact}</div>` : ''}
+          <div class="answer-nick">${esc(a.nickname)} <span style="color:#f0883e;font-size:.8rem">+${a.total}pts</span></div>
+          <div class="answer-text"><strong>Shortcut:</strong> ${esc(a.answer)}</div>
+          ${a.predicted_impact ? `<div class="answer-text" style="color:#79c0ff"><strong>Predicted:</strong> ${esc(a.predicted_impact)}</div>` : ''}
           <div class="scores-mini">
             <div class="sm">R <span>${s.realism||'?'}</span></div>
             <div class="sm">D <span>${s.danger||'?'}</span></div>
@@ -300,8 +301,8 @@ async function loadAllAnswers() {
             <div class="sm">IA <span>${s.impact_accuracy||'?'}</span></div>
             <div class="sm">IS <span>${s.impact_severity||'?'}</span></div>
           </div>
-          <div class="verdict-sm">"${s.shortcut_verdict||''}"</div>
-          ${s.impact_verdict ? `<div class="verdict-sm">"${s.impact_verdict}"</div>` : ''}
+          <div class="verdict-sm">"${esc(s.shortcut_verdict||'')}"</div>
+          ${s.impact_verdict ? `<div class="verdict-sm">"${esc(s.impact_verdict)}"</div>` : ''}
         </div>`;
       }).join('')}
     </div>

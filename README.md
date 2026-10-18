@@ -11,6 +11,13 @@ description: >-
 
 > *"We've tried telling engineers what not to do. Now we're asking them what they'd do anyway."*
 
+<p align="center">
+  <img src="docs/demo.gif" width="300" alt="A participant joins, gets a scenario, writes a reckless shortcut and a predicted impact, and gets scored by the AI judge with the real impact, mitigation and OWASP mapping revealed">
+  &nbsp;
+  <img src="docs/facilitator.png" width="520" alt="Facilitator console showing scenarios, timer, and scored answers from participants">
+</p>
+<p align="center"><sub>One real round: participant view (left), facilitator console (right). The verdicts are written by the AI judge.</sub></p>
+
 ## What is this?
 
 Most security training works like this: someone reads a list of rules aloud, everyone nods, then
@@ -67,24 +74,41 @@ understand exactly why it's a terrible idea. That's the skill the workshop is tr
 
 ## The scenarios
 
-Scenarios live in [`scenarios.json`](scenarios.json). Each one is based on a category of
-attack against AI agents (content injection, semantic manipulation, memory poisoning, behavioural
-control, systemic threats, human-in-the-loop exploitation) and mapped to an OWASP LLM risk:
+Scenarios live in [`scenarios.json`](scenarios.json). Each one is based on one of the six
+categories of attack against AI agents (content injection, semantic manipulation, memory
+poisoning, behavioural control, systemic threats, human-in-the-loop exploitation) described in
+[*AI Agent Traps*](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6372438) (Franklin et al.,
+Google DeepMind, 2026). Each one is mapped to the
+[OWASP Top 10 for LLM Applications 2026](https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/)
+and the [OWASP Top 10 for Agentic Applications](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/):
 
-| Trap | Example temptation | OWASP |
-|---|---|---|
-| Content Injection | "Legal reviewed these 200 PDFs, just index the zip" | LLM01 Prompt Injection |
-| Semantic Manipulation | "Doctors hate the disclaimers, lower the safety filter" | LLM09 Misinformation |
-| Memory Poisoning | "The agent found updated docs with source links, approve the batch" | LLM04 Data & Model Poisoning |
-| Behavioural Control | "Let the agent auto-approve the test-only PRs" | LLM06 Excessive Agency |
-| Systemic Threats | "Three AIs agree, so it must be true" | LLM09 Misinformation |
-| Human-in-the-Loop | "It's handled everything else perfectly, give it GitHub access too" | LLM06 Excessive Agency |
+| Trap | Example temptation | OWASP LLM (2026) | OWASP Agentic |
+|---|---|---|---|
+| Content Injection | "Legal reviewed these 200 PDFs, just index the zip" | LLM01 Prompt Injection | ASI06 Memory & Context Poisoning |
+| Semantic Manipulation | "Doctors hate the disclaimers, lower the safety filter" | LLM07 Misinformation | ASI09 Human-Agent Trust Exploitation |
+| Memory Poisoning | "The agent found updated docs with source links, approve the batch" | LLM05 Data & Model Poisoning | ASI06 Memory & Context Poisoning |
+| Behavioural Control | "Let the agent auto-approve the test-only PRs" | LLM03 Excessive Agency | ASI02 Tool Misuse & Exploitation |
+| Systemic Threats | "Three AIs agree, so it must be true" | LLM07 Misinformation | ASI08 Cascading Failures |
+| Human-in-the-Loop | "It's handled everything else perfectly, give it GitHub access too" | LLM03 Excessive Agency | ASI03 Identity & Privilege Abuse |
 
 Set `"active": false` to keep a scenario in reserve, or add your own. Each scenario needs a
-`situation`, an `expected_shortcut`, the real `impact`, a `mitigation` and an `owasp` mapping.
+`situation`, an `expected_shortcut`, the real `impact`, a `mitigation`, an `owasp` mapping and,
+optionally, an `owasp_agentic` mapping.
 
 > ⚠️ **Disclaimer:** Do not try any of these shortcuts at work. If you already have, this
 > workshop is a safe space. Please also rotate your secrets.
+
+## How is this different?
+
+There are great hands-on AI security games already, and this one is meant to sit next to them:
+
+* **[Gandalf](https://gandalf.lakera.ai/), [OWASP FinBot CTF](https://genai.owasp.org/), Damn Vulnerable LLM Agent:**
+  *you* attack the model. They're great for learning exploits, but they need technical players.
+* **[OWASP Cornucopia](https://owasp.org/www-project-cornucopia/) / Backdoors & Breaches:**
+  card-based threat modelling and incident response tabletop exercises.
+* **Cutting Corners Hero:** *you* are the vulnerability. It looks at the human decision under
+  deadline pressure that comes before the exploit, and anyone who has shipped software can
+  play, not just security people.
 
 ## Run it at your own event
 
@@ -148,7 +172,7 @@ The app prints a warning at startup in that case. **Always set it for a deployed
 | Variable | Required | Description |
 |---|---|---|
 | `AZURE_OPENAI_ENDPOINT` | No | Azure OpenAI endpoint URL (mock scores if absent) |
-| `AZURE_OPENAI_DEPLOYMENT` | No | Deployment name (default: `gpt-4o-mini`) |
+| `AZURE_OPENAI_DEPLOYMENT` | No | Deployment name (default: `gpt-5.4-mini`) |
 | `FACILITATOR_KEY` | Yes, when deployed | Password for the facilitator page and API (open if absent) |
 | `PORT` | No | HTTP port (default: 5000) |
 
@@ -165,7 +189,7 @@ The `infra/` folder contains Bicep templates that provision everything:
 #### Prerequisites
 
 * An existing resource group
-* An existing Azure OpenAI resource with a `gpt-4o-mini` deployment
+* An existing Azure OpenAI resource with a `gpt-5.4-mini` deployment
 
 #### Deploy infrastructure
 
@@ -186,7 +210,7 @@ az deployment group create \
   -p appName=myapp \
      skuName=B1 \
      openAiEndpoint=https://my-openai.openai.azure.com/ \
-     openAiDeployment=gpt-4o-mini \
+     openAiDeployment=gpt-5.4-mini \
      openAiResourceId=/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<name> \
      facilitatorKey="$FACILITATOR_KEY"
 ```
@@ -208,7 +232,7 @@ az webapp deploy -g <resource-group> -n <app-name> --src-path deploy.zip --type 
 | `location` | resource group location | Azure region |
 | `skuName` | `S1` | App Service Plan SKU |
 | `openAiEndpoint` | *(required)* | Azure OpenAI endpoint URL |
-| `openAiDeployment` | `gpt-4o-mini` | Model deployment name |
+| `openAiDeployment` | `gpt-5.4-mini` | Model deployment name |
 | `openAiResourceId` | *(required)* | Full resource ID of the Azure OpenAI account |
 | `facilitatorKey` | *(required, secure)* | Password for the facilitator page and API |
 

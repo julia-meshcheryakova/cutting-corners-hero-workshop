@@ -87,6 +87,7 @@ button:disabled{background:#21262d;color:#8b949e;cursor:not-allowed}
 </div>
 
 <script>
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let nickname = null;
 let lastIdx = null;
 let submitted = false;
@@ -143,27 +144,27 @@ function renderScores(s, total) {
       <div class="score-box"><div class="num">${s.danger}</div><div class="lbl">Danger</div></div>
       <div class="score-box"><div class="num">${s.creativity}</div><div class="lbl">Creativity</div></div>
     </div>
-    <div class="verdict">"${s.shortcut_verdict}"</div>
+    <div class="verdict">"${esc(s.shortcut_verdict)}"</div>
     <h3 style="color:#388bfd;font-size:.9rem;margin:14px 0 6px">💥 Impact Prediction Score</h3>
     <div class="scores">
       <div class="score-box"><div class="num">${s.impact_accuracy}</div><div class="lbl">Accuracy</div></div>
       <div class="score-box"><div class="num">${s.impact_severity}</div><div class="lbl">Severity</div></div>
       <div class="score-box"><div class="num">${total}</div><div class="lbl">Total</div></div>
     </div>
-    <div class="verdict">"${s.impact_verdict}"</div>
-    <div class="owasp">${s.owasp}</div>
+    <div class="verdict">"${esc(s.impact_verdict)}"</div>
+    <div class="owasp">${esc(s.owasp)}</div>
   `;
 }
 
 function renderSubmittedContext(situation, answer, predicted_impact, impact, mitigation) {
   document.getElementById('submitted-context').innerHTML = `
-    <div class="context-box"><h4>📋 Scenario</h4><p>${situation}</p></div>
-    <div class="context-box"><h4>🔪 Your Shortcut</h4><p>${answer}</p></div>
-    <div class="context-box"><h4>🔮 Your Predicted Impact</h4><p>${predicted_impact}</p></div>
+    <div class="context-box"><h4>📋 Scenario</h4><p>${esc(situation)}</p></div>
+    <div class="context-box"><h4>🔪 Your Shortcut</h4><p>${esc(answer)}</p></div>
+    <div class="context-box"><h4>🔮 Your Predicted Impact</h4><p>${esc(predicted_impact)}</p></div>
   `;
   document.getElementById('submitted-impact').innerHTML = `
-    <div class="context-box" style="margin-top:12px;border-color:#388bfd"><h4>💥 Actual Impact</h4><p>${impact}</p></div>
-    <div class="context-box" style="border-color:#3fb950"><h4>🛡️ Mitigation</h4><p>${mitigation}</p></div>
+    <div class="context-box" style="margin-top:12px;border-color:#388bfd"><h4>💥 Actual Impact</h4><p>${esc(impact)}</p></div>
+    <div class="context-box" style="border-color:#3fb950"><h4>🛡️ Mitigation</h4><p>${esc(mitigation)}</p></div>
   `;
 }
 
@@ -220,7 +221,7 @@ async function poll() {
 function renderLeaderboard(board) {
   if (!board.length) { document.getElementById('lb-list').innerHTML = '<div class="waiting">No scores yet.</div>'; return; }
   document.getElementById('lb-list').innerHTML = board.map((p,i) =>
-    `<div class="lb-row"><span class="lb-rank">#${i+1}</span><span>${p.nickname}</span><span class="lb-score">${p.score} pts</span></div>`
+    `<div class="lb-row"><span class="lb-rank">#${i+1}</span><span>${esc(p.nickname)}</span><span class="lb-score">${p.score} pts</span></div>`
   ).join('');
 }
 

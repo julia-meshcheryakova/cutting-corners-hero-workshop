@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "12822851864156623175"
+      "templateHash": "208925496651357118"
     }
   },
   "parameters": {
@@ -38,7 +38,7 @@
     },
     "openAiDeployment": {
       "type": "string",
-      "defaultValue": "gpt-4o-mini",
+      "defaultValue": "gpt-5.4-mini",
       "metadata": {
         "description": "Azure OpenAI deployment name"
       }

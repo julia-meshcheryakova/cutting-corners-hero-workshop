@@ -11,7 +11,7 @@ param skuName string = 'S1'
 param openAiEndpoint string
 
 @description('Azure OpenAI deployment name')
-param openAiDeployment string = 'gpt-4o-mini'
+param openAiDeployment string = 'gpt-5.4-mini'
 
 @description('Resource ID of the existing Azure OpenAI account for RBAC')
 param openAiResourceId string

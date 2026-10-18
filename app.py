@@ -24,7 +24,7 @@ def facilitator_only(fn):
 
 # ── State ──────────────────────────────────────────────────────────────────────
 with open("scenarios.json", encoding="utf-8") as f:
-    SCENARIOS = json.load(f)
+    SCENARIOS = [s for s in json.load(f) if s.get("active", True)]
 
 state = {
     "players": {},          # nickname -> {score, answers:[]}
@@ -35,7 +35,7 @@ state = {
 
 # ── Azure OpenAI scoring ───────────────────────────────────────────────────────
 AZURE_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
-AZURE_DEPLOY   = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+AZURE_DEPLOY   = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-5.4-mini")
 
 SCORE_PROMPT = """You are the ruthless judge of "Cutting Corners Hero", a security awareness game.
 A participant described how they would dangerously cut corners in an AI security scenario, AND predicted what could go wrong.
@@ -56,10 +56,14 @@ Return this exact JSON structure:
   "creativity": <1-5 integer — how creative is the shortcut>,
   "impact_accuracy": <1-5 integer — how close is their predicted impact to the actual impact>,
   "impact_severity": <1-5 integer — did they grasp how severe the consequences could be>,
-  "owasp": "<OWASP LLM category e.g. LLM01>",
   "shortcut_verdict": "<one witty sentence about their shortcut>",
   "impact_verdict": "<one witty sentence about their impact prediction>"
 }}"""
+
+def owasp_tag(s: dict) -> str:
+    """Short label, e.g. 'OWASP LLM01 · ASI06' (OWASP LLM Top 10 2026 + Agentic Top 10)."""
+    codes = [s.get("owasp", "").split(" ")[0], s.get("owasp_agentic", "").split(" ")[0]]
+    return "OWASP " + " · ".join(c for c in codes if c)
 
 def mock_score(answer: str, predicted_impact: str = "") -> dict:
     seed = sum(ord(c) for c in (answer + predicted_impact))
@@ -70,7 +74,6 @@ def mock_score(answer: str, predicted_impact: str = "") -> dict:
         "creativity":       rng.randint(1, 5),
         "impact_accuracy":  rng.randint(1, 5),
         "impact_severity":  rng.randint(1, 5),
-        "owasp":            "LLM01",
         "shortcut_verdict": "Bold move, cotton — let's see if it pays off. (mock score)",
         "impact_verdict":   "Your crystal ball needs calibration. (mock score)"
     }
@@ -87,11 +90,11 @@ def _call_azure_openai(prompt: str) -> dict:
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     payload = {
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7,
-        "max_tokens": 200
+        "max_completion_tokens": 2000,
+        "response_format": {"type": "json_object"},
     }
-    url = f"{AZURE_ENDPOINT}/openai/deployments/{AZURE_DEPLOY}/chat/completions?api-version=2024-02-01"
-    r = httpx.post(url, json=payload, headers=headers, timeout=15)
+    url = f"{AZURE_ENDPOINT}/openai/deployments/{AZURE_DEPLOY}/chat/completions?api-version=2024-10-21"
+    r = httpx.post(url, json=payload, headers=headers, timeout=30)
     r.raise_for_status()
     return json.loads(r.json()["choices"][0]["message"]["content"].strip())
 
@@ -141,6 +144,7 @@ def get_scenario():
         resp["scenario"]["impact"]     = s["impact"]
         resp["scenario"]["mitigation"] = s["mitigation"]
         resp["scenario"]["owasp"]      = s["owasp"]
+        resp["scenario"]["owasp_agentic"] = s.get("owasp_agentic", "")
     return jsonify(resp)
 
 @app.route("/api/submit", methods=["POST"])
@@ -176,6 +180,7 @@ def submit():
             try: val = int(val)
             except: val = 0
         score_data[key] = max(0, min(5, val))
+    score_data["owasp"] = owasp_tag(SCENARIOS[idx])
     total = (score_data["realism"] + score_data["danger"] +
              score_data["creativity"] + score_data["impact_accuracy"] +
              score_data["impact_severity"])
