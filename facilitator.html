@@ -89,31 +89,62 @@ button:disabled{background:#21262d;color:#555;cursor:not-allowed}
   </div>
 </div>
 <script>
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let scenarios = [];
 let currentIdx = null;
 let timerStart = null;
 let tickTimer = null;
 const TIMER_SECS = 60;
 
+// Facilitator key: asked once on 401, kept for this browser tab only.
+let keyPrompt = null;
+let keyDeclined = false;
+function askKey() {
+  if (keyDeclined) return Promise.resolve(null);
+  if (!keyPrompt) {
+    keyPrompt = new Promise(resolve => setTimeout(() => {
+      const k = prompt('Facilitator key:');
+      if (k === null) {
+        keyDeclined = true;
+        document.getElementById('status-text').textContent = 'Facilitator key required — reload the page to enter it.';
+      } else {
+        sessionStorage.setItem('facKey', k);
+      }
+      keyPrompt = null;
+      resolve(k);
+    }));
+  }
+  return keyPrompt;
+}
+
+async function api(url, opts = {}) {
+  const send = () => fetch(url, {...opts, headers: {...(opts.headers || {}), 'X-Facilitator-Key': sessionStorage.getItem('facKey') || ''}});
+  let r = await send();
+  if (r.status === 401 && await askKey() !== null) r = await send();
+  return r;
+}
+
 async function apiPost(url) {
-  await fetch(url, {method:'POST'});
+  await api(url, {method:'POST'});
   poll();
 }
 
 async function pushScenario(idx) {
   // keep pushing next until we reach target index
   // easier: just expose a direct set if needed; for now "next" cycles
-  await fetch('/api/next', {method:'POST'});
+  await api('/api/next', {method:'POST'});
   poll();
 }
 
 async function poll() {
-  const [sr, ar, lr, pr] = await Promise.all([
-    fetch('/api/scenarios_list'),
-    fetch('/api/answers'),
-    fetch('/api/leaderboard'),
-    fetch('/api/players')
+  const responses = await Promise.all([
+    api('/api/scenarios_list'),
+    api('/api/answers'),
+    api('/api/leaderboard'),
+    api('/api/players')
   ]);
+  if (responses.some(r => !r.ok)) return;
+  const [sr, ar, lr, pr] = responses;
   const sd = await sr.json();
   const ad = await ar.json();
   const ld = await lr.json();
@@ -173,7 +204,7 @@ function renderScenarios(list, cidx) {
 }
 
 async function setScenario(idx) {
-  await fetch('/api/set_scenario', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:idx})});
+  await api('/api/set_scenario', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index:idx})});
   poll();
 }
 
@@ -185,19 +216,19 @@ function renderAnswers(answers) {
     const total = a.total || 0;
     return `
     <div class="answer-item">
-      <div class="answer-nick">${a.nickname} <span style="color:#f0883e;font-size:.8rem">+${total}pts</span></div>
-      <div class="answer-text"><strong>Shortcut:</strong> ${a.answer}</div>
-      ${a.predicted_impact ? `<div class="answer-text" style="color:#79c0ff"><strong>Predicted impact:</strong> ${a.predicted_impact}</div>` : ''}
+      <div class="answer-nick">${esc(a.nickname)} <span style="color:#f0883e;font-size:.8rem">+${total}pts</span></div>
+      <div class="answer-text"><strong>Shortcut:</strong> ${esc(a.answer)}</div>
+      ${a.predicted_impact ? `<div class="answer-text" style="color:#79c0ff"><strong>Predicted impact:</strong> ${esc(a.predicted_impact)}</div>` : ''}
       <div class="scores-mini">
         <div class="sm">Realism <span>${s.realism||'?'}</span></div>
         <div class="sm">Danger <span>${s.danger||'?'}</span></div>
         <div class="sm">Creativity <span>${s.creativity||'?'}</span></div>
         <div class="sm">Accuracy <span>${s.impact_accuracy||'?'}</span></div>
         <div class="sm">Severity <span>${s.impact_severity||'?'}</span></div>
-        <div class="owasp">${s.owasp||''}</div>
+        <div class="owasp">${esc(s.owasp||'')}</div>
       </div>
-      <div class="verdict-sm">"${s.shortcut_verdict||s.verdict||''}"</div>
-      ${s.impact_verdict ? `<div class="verdict-sm">"${s.impact_verdict}"</div>` : ''}
+      <div class="verdict-sm">"${esc(s.shortcut_verdict||s.verdict||'')}"</div>
+      ${s.impact_verdict ? `<div class="verdict-sm">"${esc(s.impact_verdict)}"</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -206,7 +237,7 @@ function renderLeaderboard(board) {
   const el = document.getElementById('lb-list');
   if (!board.length) { el.innerHTML = '<div style="color:#8b949e;font-size:.85rem">No scores yet.</div>'; return; }
   el.innerHTML = board.map((p,i) =>
-    `<div class="lb-row"><span>#${i+1} ${p.nickname}</span><span class="lb-score">${p.score} pts</span></div>`
+    `<div class="lb-row"><span>#${i+1} ${esc(p.nickname)}</span><span class="lb-score">${p.score} pts</span></div>`
   ).join('');
 }
 
@@ -231,7 +262,7 @@ function renderPlayers(players) {
     ).join('');
     return `
     <div class="player-item" style="flex-wrap:wrap">
-      <span>${p.nickname}</span>
+      <span>${esc(p.nickname)}</span>
       <span class="lb-score">${p.total_score} pts</span>
       ${currentIdx !== null ? (p.submitted
         ? '<span class="status-submitted">✅</span>'
@@ -243,7 +274,8 @@ function renderPlayers(players) {
 }
 
 async function loadAllAnswers() {
-  const r = await fetch('/api/answers?scope=all');
+  const r = await api('/api/answers?scope=all');
+  if (!r.ok) return;
   const d = await r.json();
   const el = document.getElementById('all-answers-list');
   if (!d.answers.length) { el.innerHTML = '<div style="color:#8b949e;font-size:.85rem">No answers.</div>'; return; }
@@ -259,9 +291,9 @@ async function loadAllAnswers() {
       ${answers.map(a => {
         const s = a.score || {};
         return `<div class="answer-item">
-          <div class="answer-nick">${a.nickname} <span style="color:#f0883e;font-size:.8rem">+${a.total}pts</span></div>
-          <div class="answer-text"><strong>Shortcut:</strong> ${a.answer}</div>
-          ${a.predicted_impact ? `<div class="answer-text" style="color:#79c0ff"><strong>Predicted:</strong> ${a.predicted_impact}</div>` : ''}
+          <div class="answer-nick">${esc(a.nickname)} <span style="color:#f0883e;font-size:.8rem">+${a.total}pts</span></div>
+          <div class="answer-text"><strong>Shortcut:</strong> ${esc(a.answer)}</div>
+          ${a.predicted_impact ? `<div class="answer-text" style="color:#79c0ff"><strong>Predicted:</strong> ${esc(a.predicted_impact)}</div>` : ''}
           <div class="scores-mini">
             <div class="sm">R <span>${s.realism||'?'}</span></div>
             <div class="sm">D <span>${s.danger||'?'}</span></div>
@@ -269,8 +301,8 @@ async function loadAllAnswers() {
             <div class="sm">IA <span>${s.impact_accuracy||'?'}</span></div>
             <div class="sm">IS <span>${s.impact_severity||'?'}</span></div>
           </div>
-          <div class="verdict-sm">"${s.shortcut_verdict||''}"</div>
-          ${s.impact_verdict ? `<div class="verdict-sm">"${s.impact_verdict}"</div>` : ''}
+          <div class="verdict-sm">"${esc(s.shortcut_verdict||'')}"</div>
+          ${s.impact_verdict ? `<div class="verdict-sm">"${esc(s.impact_verdict)}"</div>` : ''}
         </div>`;
       }).join('')}
     </div>

@@ -1,11 +1,30 @@
-import json, os, random, time
-from flask import Flask, request, jsonify, send_from_directory
+import hmac, json, os, random, time
+from functools import wraps
+from flask import Flask, request, jsonify, send_from_directory, abort
 
-app = Flask(__name__, static_folder=".")
+app = Flask(__name__, static_folder=None)
+
+PUBLIC_PAGES = {"index.html", "facilitator.html"}
+
+# ── Facilitator auth ───────────────────────────────────────────────────────────
+FACILITATOR_KEY = os.environ.get("FACILITATOR_KEY", "")
+if not FACILITATOR_KEY:
+    print("WARNING: FACILITATOR_KEY is not set - facilitator controls are open to anyone. "
+          "Fine for local use, set it before running a real session.")
+
+def facilitator_only(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if FACILITATOR_KEY:
+            supplied = request.headers.get("X-Facilitator-Key", "")
+            if not hmac.compare_digest(supplied.encode(), FACILITATOR_KEY.encode()):
+                return jsonify({"error": "facilitator key required"}), 401
+        return fn(*args, **kwargs)
+    return wrapper
 
 # ── State ──────────────────────────────────────────────────────────────────────
 with open("scenarios.json", encoding="utf-8") as f:
-    SCENARIOS = json.load(f)
+    SCENARIOS = [s for s in json.load(f) if s.get("active", True)]
 
 state = {
     "players": {},          # nickname -> {score, answers:[]}
@@ -14,9 +33,16 @@ state = {
     "timer_start": None,    # epoch when current scenario started
 }
 
+# Public demo: skip the lobby so visitors can play a round without a facilitator
+if os.environ.get("AUTOSTART") == "1" and SCENARIOS:
+    state["current_idx"] = 0
+
+# Caps memory and AI-scoring cost: each player is scored at most once per scenario
+MAX_PLAYERS = int(os.environ.get("MAX_PLAYERS", 200))
+
 # ── Azure OpenAI scoring ───────────────────────────────────────────────────────
 AZURE_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
-AZURE_DEPLOY   = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+AZURE_DEPLOY   = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-5.4-mini")
 
 SCORE_PROMPT = """You are the ruthless judge of "Cutting Corners Hero", a security awareness game.
 A participant described how they would dangerously cut corners in an AI security scenario, AND predicted what could go wrong.
@@ -37,10 +63,14 @@ Return this exact JSON structure:
   "creativity": <1-5 integer — how creative is the shortcut>,
   "impact_accuracy": <1-5 integer — how close is their predicted impact to the actual impact>,
   "impact_severity": <1-5 integer — did they grasp how severe the consequences could be>,
-  "owasp": "<OWASP LLM category e.g. LLM01>",
   "shortcut_verdict": "<one witty sentence about their shortcut>",
   "impact_verdict": "<one witty sentence about their impact prediction>"
 }}"""
+
+def owasp_tag(s: dict) -> str:
+    """Short label, e.g. 'OWASP LLM01 · ASI06' (OWASP LLM Top 10 2026 + Agentic Top 10)."""
+    codes = [s.get("owasp", "").split(" ")[0], s.get("owasp_agentic", "").split(" ")[0]]
+    return "OWASP " + " · ".join(c for c in codes if c)
 
 def mock_score(answer: str, predicted_impact: str = "") -> dict:
     seed = sum(ord(c) for c in (answer + predicted_impact))
@@ -51,7 +81,6 @@ def mock_score(answer: str, predicted_impact: str = "") -> dict:
         "creativity":       rng.randint(1, 5),
         "impact_accuracy":  rng.randint(1, 5),
         "impact_severity":  rng.randint(1, 5),
-        "owasp":            "LLM01",
         "shortcut_verdict": "Bold move, cotton — let's see if it pays off. (mock score)",
         "impact_verdict":   "Your crystal ball needs calibration. (mock score)"
     }
@@ -68,11 +97,11 @@ def _call_azure_openai(prompt: str) -> dict:
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     payload = {
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7,
-        "max_tokens": 200
+        "max_completion_tokens": 2000,
+        "response_format": {"type": "json_object"},
     }
-    url = f"{AZURE_ENDPOINT}/openai/deployments/{AZURE_DEPLOY}/chat/completions?api-version=2024-02-01"
-    r = httpx.post(url, json=payload, headers=headers, timeout=15)
+    url = f"{AZURE_ENDPOINT}/openai/deployments/{AZURE_DEPLOY}/chat/completions?api-version=2024-10-21"
+    r = httpx.post(url, json=payload, headers=headers, timeout=30)
     r.raise_for_status()
     return json.loads(r.json()["choices"][0]["message"]["content"].strip())
 
@@ -96,6 +125,8 @@ def join():
     if not nick:
         return jsonify({"error": "nickname required"}), 400
     if nick not in state["players"]:
+        if len(state["players"]) >= MAX_PLAYERS:
+            return jsonify({"error": "the room is full"}), 403
         state["players"][nick] = {"score": 0, "answers": []}
     return jsonify({"ok": True, "nickname": nick})
 
@@ -122,6 +153,7 @@ def get_scenario():
         resp["scenario"]["impact"]     = s["impact"]
         resp["scenario"]["mitigation"] = s["mitigation"]
         resp["scenario"]["owasp"]      = s["owasp"]
+        resp["scenario"]["owasp_agentic"] = s.get("owasp_agentic", "")
     return jsonify(resp)
 
 @app.route("/api/submit", methods=["POST"])
@@ -157,6 +189,7 @@ def submit():
             try: val = int(val)
             except: val = 0
         score_data[key] = max(0, min(5, val))
+    score_data["owasp"] = owasp_tag(SCENARIOS[idx])
     total = (score_data["realism"] + score_data["danger"] +
              score_data["creativity"] + score_data["impact_accuracy"] +
              score_data["impact_severity"])
@@ -187,6 +220,7 @@ def leaderboard():
     return jsonify({"leaderboard": board})
 
 @app.route("/api/answers", methods=["GET"])
+@facilitator_only
 def answers():
     """Facilitator: answers for a specific or current scenario, or all."""
     scope = request.args.get("scope", "current")  # current | all | <scenario_id>
@@ -214,6 +248,7 @@ def answers():
     return jsonify({"answers": result})
 
 @app.route("/api/next", methods=["POST"])
+@facilitator_only
 def next_scenario():
     idx = state["current_idx"]
     if idx is None:
@@ -227,17 +262,20 @@ def next_scenario():
     return jsonify({"ok": True, "current_idx": state["current_idx"]})
 
 @app.route("/api/start_timer", methods=["POST"])
+@facilitator_only
 def start_timer():
     if state["current_idx"] is not None:
         state["timer_start"] = time.time()
     return jsonify({"ok": True})
 
 @app.route("/api/reveal", methods=["POST"])
+@facilitator_only
 def reveal():
     state["revealed"] = True
     return jsonify({"ok": True})
 
 @app.route("/api/reset", methods=["POST"])
+@facilitator_only
 def reset():
     state["players"] = {}
     state["current_idx"] = None
@@ -246,6 +284,7 @@ def reset():
     return jsonify({"ok": True})
 
 @app.route("/api/set_scenario", methods=["POST"])
+@facilitator_only
 def set_scenario():
     data = request.json or {}
     idx = data.get("index")
@@ -256,6 +295,7 @@ def set_scenario():
     return jsonify({"ok": True, "current_idx": state["current_idx"]})
 
 @app.route("/api/players", methods=["GET"])
+@facilitator_only
 def players():
     """List all players with per-question score breakdown."""
     idx = state["current_idx"]
@@ -281,12 +321,16 @@ def players():
     return jsonify({"players": result})
 
 @app.route("/api/scenarios_list", methods=["GET"])
+@facilitator_only
 def scenarios_list():
     return jsonify({"scenarios": SCENARIOS, "current_idx": state["current_idx"], "timer_start": state["timer_start"]})
 
 @app.route("/", defaults={"path": "index.html"})
 @app.route("/<path:path>")
 def static_files(path):
+    # Only serve the two UI pages; everything else (scenarios.json, app.py, .env) stays private.
+    if path not in PUBLIC_PAGES:
+        abort(404)
     return send_from_directory(".", path)
 
 if __name__ == "__main__":

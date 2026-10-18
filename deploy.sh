@@ -2,6 +2,11 @@
 # Deploy to Azure App Service (Linux, Python 3.12)
 # Prerequisites: az cli logged in, resource group + app service plan exist
 
+if [ -z "$FACILITATOR_KEY" ]; then
+  echo "FACILITATOR_KEY is not set — refusing to deploy an open facilitator page." >&2
+  exit 1
+fi
+
 APP_NAME="${APP_NAME:-cutting-corners-hero}"
 RG="${RESOURCE_GROUP:-my-rg}"
 PLAN="${APP_SERVICE_PLAN:-my-plan}"
@@ -18,7 +23,8 @@ az webapp config appsettings set \
   --name "$APP_NAME" \
   --settings \
     AZURE_OPENAI_ENDPOINT="$AZURE_OPENAI_ENDPOINT" \
-    AZURE_OPENAI_DEPLOYMENT="${AZURE_OPENAI_DEPLOYMENT:-gpt-4o-mini}" \
+    AZURE_OPENAI_DEPLOYMENT="${AZURE_OPENAI_DEPLOYMENT:-gpt-5.4-mini}" \
+    FACILITATOR_KEY="$FACILITATOR_KEY" \
     SCM_DO_BUILD_DURING_DEPLOYMENT=true
 
 # Enable system-assigned managed identity
