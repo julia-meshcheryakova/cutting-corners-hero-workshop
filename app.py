@@ -1,7 +1,26 @@
-import json, os, random, time
-from flask import Flask, request, jsonify, send_from_directory
+import hmac, json, os, random, time
+from functools import wraps
+from flask import Flask, request, jsonify, send_from_directory, abort
 
-app = Flask(__name__, static_folder=".")
+app = Flask(__name__, static_folder=None)
+
+PUBLIC_PAGES = {"index.html", "facilitator.html"}
+
+# ── Facilitator auth ───────────────────────────────────────────────────────────
+FACILITATOR_KEY = os.environ.get("FACILITATOR_KEY", "")
+if not FACILITATOR_KEY:
+    print("WARNING: FACILITATOR_KEY is not set - facilitator controls are open to anyone. "
+          "Fine for local use, set it before running a real session.")
+
+def facilitator_only(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if FACILITATOR_KEY:
+            supplied = request.headers.get("X-Facilitator-Key", "")
+            if not hmac.compare_digest(supplied.encode(), FACILITATOR_KEY.encode()):
+                return jsonify({"error": "facilitator key required"}), 401
+        return fn(*args, **kwargs)
+    return wrapper
 
 # ── State ──────────────────────────────────────────────────────────────────────
 with open("scenarios.json", encoding="utf-8") as f:
@@ -187,6 +206,7 @@ def leaderboard():
     return jsonify({"leaderboard": board})
 
 @app.route("/api/answers", methods=["GET"])
+@facilitator_only
 def answers():
     """Facilitator: answers for a specific or current scenario, or all."""
     scope = request.args.get("scope", "current")  # current | all | <scenario_id>
@@ -214,6 +234,7 @@ def answers():
     return jsonify({"answers": result})
 
 @app.route("/api/next", methods=["POST"])
+@facilitator_only
 def next_scenario():
     idx = state["current_idx"]
     if idx is None:
@@ -227,17 +248,20 @@ def next_scenario():
     return jsonify({"ok": True, "current_idx": state["current_idx"]})
 
 @app.route("/api/start_timer", methods=["POST"])
+@facilitator_only
 def start_timer():
     if state["current_idx"] is not None:
         state["timer_start"] = time.time()
     return jsonify({"ok": True})
 
 @app.route("/api/reveal", methods=["POST"])
+@facilitator_only
 def reveal():
     state["revealed"] = True
     return jsonify({"ok": True})
 
 @app.route("/api/reset", methods=["POST"])
+@facilitator_only
 def reset():
     state["players"] = {}
     state["current_idx"] = None
@@ -246,6 +270,7 @@ def reset():
     return jsonify({"ok": True})
 
 @app.route("/api/set_scenario", methods=["POST"])
+@facilitator_only
 def set_scenario():
     data = request.json or {}
     idx = data.get("index")
@@ -256,6 +281,7 @@ def set_scenario():
     return jsonify({"ok": True, "current_idx": state["current_idx"]})
 
 @app.route("/api/players", methods=["GET"])
+@facilitator_only
 def players():
     """List all players with per-question score breakdown."""
     idx = state["current_idx"]
@@ -281,12 +307,16 @@ def players():
     return jsonify({"players": result})
 
 @app.route("/api/scenarios_list", methods=["GET"])
+@facilitator_only
 def scenarios_list():
     return jsonify({"scenarios": SCENARIOS, "current_idx": state["current_idx"], "timer_start": state["timer_start"]})
 
 @app.route("/", defaults={"path": "index.html"})
 @app.route("/<path:path>")
 def static_files(path):
+    # Only serve the two UI pages; everything else (scenarios.json, app.py, .env) stays private.
+    if path not in PUBLIC_PAGES:
+        abort(404)
     return send_from_directory(".", path)
 
 if __name__ == "__main__":

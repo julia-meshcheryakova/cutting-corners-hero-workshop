@@ -86,6 +86,27 @@ Set `"active": false` to keep a scenario in reserve, or add your own. Each scena
 > ⚠️ **Disclaimer:** Do not try any of these shortcuts at work. If you already have, this
 > workshop is a safe space. Please also rotate your secrets.
 
+## Run it at your own event
+
+The game is meant to be reused. It works well as:
+
+* **A team lunch-and-learn.** Six scenarios, one round each, done in under an hour.
+* **A conference or meetup workshop.** Participants join from their phones, and the facilitator
+  screen goes on the projector.
+* **Onboarding for AI-heavy teams.** It's a lighter introduction to the OWASP LLM risks than reading the list.
+
+To make it your own:
+
+1. Edit [`scenarios.json`](scenarios.json). Rewrite the situations around your own stack, internal
+   tools, or domain (healthcare, fintech, internal platforms…), and set `"active": true` on the
+   scenarios you want to play.
+2. Set a `FACILITATOR_KEY` so only you can drive the game.
+3. Share the participant URL (a QR code on the first slide works well) and open
+   `/facilitator.html` on your own screen.
+
+New scenarios, translations and stories about how your session went are welcome. Open an
+issue or a PR.
+
 ## Run locally
 
 ```bash
@@ -108,12 +129,27 @@ The identity needs the **Cognitive Services OpenAI User** role on the Azure Open
 * Participants: `http://localhost:5000/`
 * Facilitator: `http://localhost:5000/facilitator.html`
 
+### Facilitator key
+
+Set `FACILITATOR_KEY` to require a password for the facilitator page and its controls (next,
+reveal, reset, and viewing all answers):
+
+```bash
+export FACILITATOR_KEY=pick-a-long-random-string
+python app.py
+```
+
+The facilitator page asks for the key once and keeps it for that browser tab. If the key isn't
+set, the controls are open to anyone, which is fine on your laptop but not on a shared network.
+The app prints a warning at startup in that case. **Always set it for a deployed instance.**
+
 ## Environment variables
 
 | Variable | Required | Description |
 |---|---|---|
 | `AZURE_OPENAI_ENDPOINT` | No | Azure OpenAI endpoint URL (mock scores if absent) |
 | `AZURE_OPENAI_DEPLOYMENT` | No | Deployment name (default: `gpt-4o-mini`) |
+| `FACILITATOR_KEY` | Yes, when deployed | Password for the facilitator page and API (open if absent) |
 | `PORT` | No | HTTP port (default: 5000) |
 
 ## Deploy to Azure App Service
@@ -134,6 +170,7 @@ The `infra/` folder contains Bicep templates that provision everything:
 #### Deploy infrastructure
 
 ```bash
+export FACILITATOR_KEY=pick-a-long-random-string   # read by main.bicepparam
 az deployment group create \
   -g <resource-group> \
   -f infra/main.bicep \
@@ -150,7 +187,8 @@ az deployment group create \
      skuName=B1 \
      openAiEndpoint=https://my-openai.openai.azure.com/ \
      openAiDeployment=gpt-4o-mini \
-     openAiResourceId=/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<name>
+     openAiResourceId=/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<name> \
+     facilitatorKey="$FACILITATOR_KEY"
 ```
 
 #### Deploy application code
@@ -172,15 +210,22 @@ az webapp deploy -g <resource-group> -n <app-name> --src-path deploy.zip --type 
 | `openAiEndpoint` | *(required)* | Azure OpenAI endpoint URL |
 | `openAiDeployment` | `gpt-4o-mini` | Model deployment name |
 | `openAiResourceId` | *(required)* | Full resource ID of the Azure OpenAI account |
+| `facilitatorKey` | *(required, secure)* | Password for the facilitator page and API |
 
 ### Option 2 — Shell script
 
 ```bash
 export APP_NAME=cutting-corners-hero RESOURCE_GROUP=my-rg APP_SERVICE_PLAN=my-plan
 export AZURE_OPENAI_ENDPOINT=https://my-resource.openai.azure.com
+export FACILITATOR_KEY=pick-a-long-random-string
 bash deploy.sh
 ```
 
-The deploy script enables system-assigned managed identity on the web app.
+The script refuses to deploy without `FACILITATOR_KEY` and enables system-assigned managed
+identity on the web app.
 After deploying, assign the **Cognitive Services OpenAI User** role to the
 web app's managed identity on your Azure OpenAI resource.
+
+## License
+
+[MIT](LICENSE). Use it, fork it, and run it at your company. A link back is appreciated.

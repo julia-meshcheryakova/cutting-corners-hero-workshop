@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.24.24.22086",
-      "templateHash": "12844257367514296184"
+      "version": "0.48.1.52935",
+      "templateHash": "12822851864156623175"
     }
   },
   "parameters": {
@@ -48,6 +48,12 @@
       "metadata": {
         "description": "Resource ID of the existing Azure OpenAI account for RBAC"
       }
+    },
+    "facilitatorKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the facilitator page and controls"
+      }
     }
   },
   "resources": [
@@ -89,6 +95,10 @@
               "value": "[parameters('openAiDeployment')]"
             },
             {
+              "name": "FACILITATOR_KEY",
+              "value": "[parameters('facilitatorKey')]"
+            },
+            {
               "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
               "value": "true"
             }
@@ -102,7 +112,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2022-09-01",
+      "apiVersion": "2025-04-01",
       "name": "openai-role-assignment",
       "resourceGroup": "[split(parameters('openAiResourceId'), '/')[4]]",
       "properties": {
@@ -124,8 +134,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.24.24.22086",
-              "templateHash": "6578144795494396396"
+              "version": "0.48.1.52935",
+              "templateHash": "10456665598486291240"
             }
           },
           "parameters": {
@@ -153,7 +163,7 @@
             {
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
-              "scope": "[format('Microsoft.CognitiveServices/accounts/{0}', parameters('openAiAccountName'))]",
+              "scope": "[resourceId('Microsoft.CognitiveServices/accounts', parameters('openAiAccountName'))]",
               "name": "[guid(resourceId('Microsoft.CognitiveServices/accounts', parameters('openAiAccountName')), parameters('principalId'), parameters('roleDefinitionId'))]",
               "properties": {
                 "principalId": "[parameters('principalId')]",

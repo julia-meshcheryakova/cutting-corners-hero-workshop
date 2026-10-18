@@ -16,6 +16,10 @@ param openAiDeployment string = 'gpt-4o-mini'
 @description('Resource ID of the existing Azure OpenAI account for RBAC')
 param openAiResourceId string
 
+@secure()
+@description('Password for the facilitator page and controls')
+param facilitatorKey string
+
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: '${appName}-plan'
   location: location
@@ -49,6 +53,10 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'AZURE_OPENAI_DEPLOYMENT'
           value: openAiDeployment
+        }
+        {
+          name: 'FACILITATOR_KEY'
+          value: facilitatorKey
         }
         {
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
