@@ -18,6 +18,9 @@ description: >-
 </p>
 <p align="center"><sub>One real round: participant view (left), facilitator console (right). The verdicts are written by the AI judge.</sub></p>
 
+<p align="center"><b>▶ <a href="https://cutting-corners-hero.azurewebsites.net/">Try a round in the live demo</a></b><br>
+<sub>Pick a nickname, cut a corner, get judged. The demo is shared and public, so keep your answers clean. It runs on a free tier, so the first load can take ~30 s.</sub></p>
+
 ## What is this?
 
 Most security training works like this: someone reads a list of rules aloud, everyone nods, then
@@ -174,6 +177,8 @@ The app prints a warning at startup in that case. **Always set it for a deployed
 | `AZURE_OPENAI_ENDPOINT` | No | Azure OpenAI endpoint URL (mock scores if absent) |
 | `AZURE_OPENAI_DEPLOYMENT` | No | Deployment name (default: `gpt-5.4-mini`) |
 | `FACILITATOR_KEY` | Yes, when deployed | Password for the facilitator page and API (open if absent) |
+| `AUTOSTART` | No | Set to `1` to skip the lobby and open the first scenario at startup (useful for a public self-serve demo) |
+| `MAX_PLAYERS` | No | Maximum number of players (default: 200). Caps memory and AI-scoring cost |
 | `PORT` | No | HTTP port (default: 5000) |
 
 ## Deploy to Azure App Service

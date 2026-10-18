@@ -33,6 +33,13 @@ state = {
     "timer_start": None,    # epoch when current scenario started
 }
 
+# Public demo: skip the lobby so visitors can play a round without a facilitator
+if os.environ.get("AUTOSTART") == "1" and SCENARIOS:
+    state["current_idx"] = 0
+
+# Caps memory and AI-scoring cost: each player is scored at most once per scenario
+MAX_PLAYERS = int(os.environ.get("MAX_PLAYERS", 200))
+
 # ── Azure OpenAI scoring ───────────────────────────────────────────────────────
 AZURE_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
 AZURE_DEPLOY   = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-5.4-mini")
@@ -118,6 +125,8 @@ def join():
     if not nick:
         return jsonify({"error": "nickname required"}), 400
     if nick not in state["players"]:
+        if len(state["players"]) >= MAX_PLAYERS:
+            return jsonify({"error": "the room is full"}), 403
         state["players"][nick] = {"score": 0, "answers": []}
     return jsonify({"ok": True, "nickname": nick})
 
