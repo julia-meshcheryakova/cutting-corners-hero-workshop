@@ -1,7 +1,90 @@
 ---
 title: Cutting Corners Hero
-description: Interactive security workshop game where participants compete to be the most recklessly efficient AI engineer
+description: >-
+  An inverted security workshop game. Instead of being told what not to do, participants
+  compete to be the most recklessly efficient AI engineer in the room. They pitch the
+  laziest plausible shortcut, predict how it backfires, and then see what actually blows up.
+  It's still a security course, just with the incentives flipped.
 ---
+
+# 🦸 Cutting Corners Hero
+
+> *"We've tried telling engineers what not to do. Now we're asking them what they'd do anyway."*
+
+## What is this?
+
+Most security training works like this: someone reads a list of rules aloud, everyone nods, then
+everyone goes back to their desks and ships the shortcut. **Cutting Corners Hero flips that.**
+
+For one session, you're not the careful engineer. You're the *hero*: the one who gets the AI
+feature live by Friday, clears 34 PRs before lunch, and gives the agent prod access "just for
+setup". Every round you get a realistic AI scenario under deadline pressure, and your job is to:
+
+1. **🔪 Cut the corner.** Describe the most realistic, tempting, *I-would-totally-do-this* shortcut.
+2. **🔮 Predict the fallout.** Say what you think could go wrong.
+3. **💥 Face the music.** The facilitator reveals what actually happened, along with the fix.
+
+An AI judge scores every answer, and the leaderboard decides who is officially the most
+dangerous engineer in the building.
+
+## Why invert the training?
+
+* **Everyone already knows the rules.** What they don't do is notice the moment a shortcut
+  starts to look reasonable. Saying "I'd just bulk-index the PDFs, legal reviewed them" out loud
+  makes that moment easy to spot next time.
+* **Attackers think this way.** If you can come up with the shortcut, you can probably
+  come up with the exploit.
+* **Confessing is more fun than lecturing.** A room full of people competing to sound the
+  most irresponsible is much livelier than slide 47 of a compliance deck.
+* **The reveal does the teaching.** Each scenario ends with the real impact, a mitigation,
+  and the matching [OWASP Top 10 for LLM Applications](https://genai.owasp.org/llm-top-10/)
+  category. People remember a lesson better when they walked into it themselves.
+
+## How a round works
+
+| Step | Facilitator | Participants |
+|---|---|---|
+| 1 | Clicks **▶ Next Scenario** | Read the situation. Feel the deadline pressure. |
+| 2 | Clicks **⏱ Start Timer** | Have **60 seconds** to write a shortcut and a predicted impact. Answers auto-submit when time runs out. |
+| 3 | Watches answers come in | The AI judge scores the answer and adds a witty verdict |
+| 4 | Clicks **💥 Reveal Impact** | See the actual impact and mitigation, then argue about who was closest |
+| 5 | Repeat, then crown the hero 🏆 | Pretend you'd never *actually* do that |
+
+## Scoring
+
+Each answer is scored 1–5 on five axes, for a maximum of **25 points per round**:
+
+| Axis | Rewards |
+|---|---|
+| **Realism** | A shortcut someone would actually take on a Thursday afternoon |
+| **Danger** | How much damage the shortcut opens the door to |
+| **Creativity** | Points for originality. "Just disable auth" gets you only so far |
+| **Impact accuracy** | How close your prediction is to what really happened |
+| **Impact severity** | Whether you understood how bad it could get |
+
+So the winning move is **not** to be careless. It's to be *believably* careless **and**
+understand exactly why it's a terrible idea. That's the skill the workshop is training.
+
+## The scenarios
+
+Scenarios live in [`scenarios.json`](scenarios.json). Each one is based on a category of
+attack against AI agents (content injection, semantic manipulation, memory poisoning, behavioural
+control, systemic threats, human-in-the-loop exploitation) and mapped to an OWASP LLM risk:
+
+| Trap | Example temptation | OWASP |
+|---|---|---|
+| Content Injection | "Legal reviewed these 200 PDFs, just index the zip" | LLM01 Prompt Injection |
+| Semantic Manipulation | "Doctors hate the disclaimers, lower the safety filter" | LLM09 Misinformation |
+| Memory Poisoning | "The agent found updated docs with source links, approve the batch" | LLM04 Data & Model Poisoning |
+| Behavioural Control | "Let the agent auto-approve the test-only PRs" | LLM06 Excessive Agency |
+| Systemic Threats | "Three AIs agree, so it must be true" | LLM09 Misinformation |
+| Human-in-the-Loop | "It's handled everything else perfectly, give it GitHub access too" | LLM06 Excessive Agency |
+
+Set `"active": false` to keep a scenario in reserve, or add your own. Each scenario needs a
+`situation`, an `expected_shortcut`, the real `impact`, a `mitigation` and an `owasp` mapping.
+
+> ⚠️ **Disclaimer:** Do not try any of these shortcuts at work. If you already have, this
+> workshop is a safe space. Please also rotate your secrets.
 
 ## Run locally
 
